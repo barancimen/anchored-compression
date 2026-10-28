@@ -95,6 +95,9 @@
 #ifndef FILL
 #define FILL 0  // fill estimate of unknown pixels: 0 lattice point below-left, 1 bilinear
 #endif
+#ifndef ROWS
+#define ROWS 0  // 1: anchors are whole rows (y % T == 0); refinement halves the row spacing
+#endif
 #define NI (NC + 1 + 2 * DIR)  // mixer inputs
 
 #define W 500
@@ -104,7 +107,7 @@
 #define HB 22
 
 typedef struct { int n, dx[MAXL], dy[MAXL]; } Sten;
-static Sten SA, SD, SX, SR;
+static Sten SA, SD, SX, SR, SW0, SW1;
 
 static unsigned char X[NPIX];  // the image
 static double F[NPIX];  // known value, or fill estimate of an unknown pixel
@@ -145,6 +148,8 @@ static int cmpd(const void *a, const void *b) {
 
 // kind 0: anchor raster (causal offsets); 1: centres (known: odd/odd, or even/even causal);
 // 3: raster after anchors (causal within r, plus look-ahead within RL);
+// 4: anchor rows (dx in pixels, dy in units of T; causal); 5: refined rows (dy odd = known
+// rows above/below, dy even = rows of the same pass, known if causal);
 // 2: axis pixels (known: dx+dy odd, or dx+dy even causal). Sorted by distance.
 static void mksten(Sten *s, int kind, double r) {
   int t[4 * MAXL * 4][3], n = 0, R = (int)r;
@@ -155,7 +160,9 @@ static void mksten(Sten *s, int kind, double r) {
       if (kind == 0) ok = causal;
       else if (kind == 1) ok = (dx & 1 && dy & 1) || (!(dx & 1) && !(dy & 1) && causal);
       else if (kind == 2) ok = ((dx + dy) & 1) || causal;
-      else ok = causal || d2 <= RL * RL;
+      else if (kind == 3) ok = causal || d2 <= RL * RL;
+      else if (kind == 4) ok = causal;
+      else ok = (dy & 1) || causal;
       // kind 3: causal offsets first, so the 4 nearest used by contexts are real pixels
       if (ok) t[n][0] = d2 + (kind == 3 && !causal) * 10000, t[n][1] = dy, t[n][2] = dx, n++;
     }
@@ -173,12 +180,12 @@ static int clampi(int v) { return v < 0 ? 0 : v > W - 1 ? W - 1 : v; }
 
 static int shg(int g, int on) { return on && g ? 1 + (g - 1) % 3 : g; }
 
-static void code_pixel(int x, int y, int g, Sten *s, int u) {
+static void code_pixel(int x, int y, int g, Sten *s, int ux, int uy) {
   int L = s->n, k = y * W + x, i, j, gr = shg(g, SHR), gv = shg(g, SHV), gc = shg(g, SHC);
   double o[MAXL], m = 0, base = 0;
   int nb[MAXL];
   for (i = 0; i < L; i++) {
-    int kk = clampi(y + s->dy[i] * u) * W + clampi(x + s->dx[i] * u);
+    int kk = clampi(y + s->dy[i] * uy) * W + clampi(x + s->dx[i] * ux);
     nb[i] = kk, o[i] = F[kk];
   }
   if (RES) base = (o[0] + o[1] + o[2] + o[3]) / 4;
@@ -264,6 +271,17 @@ static void fill(int u) {  // fill estimate of unknown pixels from the known lat
     }
 }
 
+static void fill_rows(int u) {  // unknown rows: linear interpolation between known rows
+  int last = (W - 1) / u * u;
+  for (int y = 0; y < W; y++)
+    for (int x = 0; x < W; x++) {
+      if (K[y * W + x]) continue;
+      int y0 = y - y % u, y1 = y0 + u > last ? y0 : y0 + u;
+      double fy = y1 > y0 ? (double)(y - y0) / u : 0;
+      F[y * W + x] = FILL ? (1 - fy) * F[y0 * W + x] + fy * F[y1 * W + x] : F[y0 * W + x];
+    }
+}
+
 static void reset(void) {
   memset(F, 0, sizeof F), memset(K, 0, sizeof K), memset(E, 0, sizeof E);
   memset(N, 0, sizeof N), memset(C, 0, sizeof C), memset(Bv, 0, sizeof Bv), memset(A, 0, sizeof A);
@@ -275,9 +293,22 @@ static void reset(void) {
 }
 
 static void run(void) {
+  if (ROWS) {
+    for (int y = 0; y < W; y += T)
+      for (int x = 0; x < W; x++) code_pixel(x, y, 0, &SW0, 1, T);
+    fill_rows(T);
+    for (int t = T, lv = 0; t >= 2; t /= 2, lv++) {
+      int h = t / 2;
+      for (int y = h; y < W; y += t)
+        for (int x = 0; x < W; x++) code_pixel(x, y, 1 + 3 * lv, &SW1, 1, h);
+      fill_rows(h);
+    }
+    if (!dec) buf[bp++] = (lo >> 24) + 1;
+    return;
+  }
   for (int y = 0; y < W; y += T)
     for (int x = 0; x < W; x += T)
-      VERB && T > 1 ? code_verbatim(x, y) : code_pixel(x, y, 0, &SA, T);
+      VERB && T > 1 ? code_verbatim(x, y) : code_pixel(x, y, 0, &SA, T, T);
   fill(T);
   if (RMODE) {
     // probe only (not transmitted): extra anchors from a mask file, given to the model for free
@@ -285,7 +316,8 @@ static void run(void) {
     static int nmask = -1;
     if (nmask < 0) {
       FILE *mf = getenv("ANCHMASK") ? fopen(getenv("ANCHMASK"), "rb") : 0;
-      nmask = mf ? (int)fread(mask, 1, NPIX, mf) * 0 : 0;
+      nmask = 0;
+      if (mf && fread(mask, 1, NPIX, mf) != NPIX) nmask = 0;
       if (mf) fclose(mf);
       for (int i = 0; i < NPIX; i++) nmask += mask[i] && !K[i];
       if (nmask) fprintf(stderr, "free mask anchors: %d\n", nmask);
@@ -294,16 +326,16 @@ static void run(void) {
       if (mask[i] && !K[i]) F[i] = X[i], K[i] = 1;
     for (int y = 0; y < W; y++)
       for (int x = 0; x < W; x++)
-        if (!K[y * W + x]) code_pixel(x, y, 1, &SR, 1);
+        if (!K[y * W + x]) code_pixel(x, y, 1, &SR, 1, 1);
     if (!dec) buf[bp++] = (lo >> 24) + 1;
     return;
   }
   for (int t = T, lv = 0; t >= 2; t /= 2, lv++) {
     int h = t / 2, g = 1 + 3 * lv;
     for (int y = h; y < W; y += t)
-      for (int x = h; x < W; x += t) code_pixel(x, y, g, &SD, h);
+      for (int x = h; x < W; x += t) code_pixel(x, y, g, &SD, h, h);
     for (int y = 0; y < W; y += h)
-      for (int x = y % t ? 0 : h; x < W; x += t) code_pixel(x, y, g + 1 + (y % t != 0), &SX, h);
+      for (int x = y % t ? 0 : h; x < W; x += t) code_pixel(x, y, g + 1 + (y % t != 0), &SX, h, h);
     fill(h);
   }
   if (!dec) buf[bp++] = (lo >> 24) + 1;
@@ -315,7 +347,7 @@ int main(int argc, char **argv) {
   if (!f || fread(raw, 1, NPIX / 2, f) != NPIX / 2) return fprintf(stderr, "bad image\n"), 1;
   fclose(f);
   for (int i = 0; i < NPIX; i++) X[i] = raw[i / 2] >> (i % 2 ? 0 : 4) & 15;
-  mksten(&SA, 0, RA), mksten(&SD, 1, RD), mksten(&SX, 2, RX), mksten(&SR, 3, RA > RL ? RA : RL);
+  mksten(&SA, 0, RA), mksten(&SD, 1, RD), mksten(&SX, 2, RX), mksten(&SR, 3, RA > RL ? RA : RL), mksten(&SW0, 4, RA), mksten(&SW1, 5, RD);
   buf = malloc(1 << 20);
   reset(), dec = 0, run();
   long alen = bp;
@@ -327,6 +359,7 @@ int main(int argc, char **argv) {
       static const char *kind[3] = {"centre", "axis-h", "axis-v"};
       char lab[32];
       if (g && RMODE) snprintf(lab, sizeof lab, "rest (raster)");
+      else if (g && ROWS) snprintf(lab, sizeof lab, "rows t=%d", T >> (g - 1) / 3);
       else if (g) snprintf(lab, sizeof lab, "t=%d %s", T >> (g - 1) / 3, kind[(g - 1) % 3]);
       else snprintf(lab, sizeof lab, VERB && T > 1 ? "anchors verbatim" : "anchors");
       printf("  %-16s %7ld px %9.0f bits %6.3f bpp\n", lab, gcount[g], gbits[g], gbits[g] / gcount[g]);

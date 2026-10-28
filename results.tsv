@@ -1,2 +1,3 @@
 exp	status	S	code	L_A	charges	bpp	t_comp	t_dec	rss_mb	description
 000_raster_ref	ref	41616	2054	39512	50	1.2644	25.3	25.7	41	REFERENCE: earlier project's best raster-scan CM (no anchors), copied unchanged
+001_lattice_lookahead	keep	41968	2352	39566	50	1.2661	37.9	38.7	41	anchors: 8x8 lattice (step 64, scan coords) stored verbatim 1 byte each; bilinear anchor fill; RLS stencil 112 causal + 23 look-ahead cells; model/coder from 000_raster_ref
