@@ -94,3 +94,7 @@ pay almost exactly that back: information moves between levels, it does not disa
 | 001 with T=32 / T=128 | 39721 / 39529 | fewer anchors is better |
 | 002 quadtree, T=2, radius-6 stencils | 40200 | scored S 42644 |
 | 002 under the 8 scan orientations | 40064 (transposed) .. 40217 | transposed: -136 |
+| quadtree context search (lab/qtsearch.py, 3 rounds, log in lab/qtsearch.log) | 40064 -> 39939 | keep: (v9,v1,v0) (v0,v1,v10) (v2,v3) (m,q) (v7,v11,v4,v5) |
+| same contexts on held-out h1 / h2 / h3 | -128 / -159 / -154 | transfers |
+| 004 = 002 + transposed + searched contexts | 39939 | scored S 42417 (best of family B) |
+| 003 = 001 with T=128 (16 anchors) | 39529 | scored S 41929 (new best) |
