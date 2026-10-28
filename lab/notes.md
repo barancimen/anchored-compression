@@ -28,3 +28,40 @@ then edge midpoints (pass A). Defaults: RLS stencils 12 (anchors) / 16 (centres)
 Reading: by the chain rule every coding order has the same ideal total; an order only
 wins if its online model learns better. Separate statistics per level starve the coarse
 levels (few pixels); sharing them across levels removes most of the hierarchy's handicap.
+
+## 2. Anchors + raster coding of the rest with look-ahead (RMODE=1)
+Anchors = sparse lattice of step T; unknown pixels are filled with the bilinear
+interpolation of the anchors; the rest is coded in raster order and its RLS stencil also
+reaches ahead (radius RL) into the fill. Noise level of these comparisons: about +-30 bytes
+(e.g. an 80-cell cap that silently dropped the look-ahead still moved results by 20-30).
+
+| probe | result | verdict |
+|---|---|---|
+| raster T=1, causal radius 5.5 | 40074 | baseline for this block |
+| look-ahead, contexts from the 4 nearest incl. fill estimates: T=4/8/16/32 | 40406 / 40392 / 40371 / 40346 | worse: fill estimates poison contexts |
+| contexts from causal pixels only: T=8 / 16 / 32 / 64 | 40273 / 40119 / 40035 / 40032 | T>=32 ties raster |
+| causal radius 7.5 (88 cells) + look-ahead 4.5: raster / T=16 / 32 / 64 | 40000 / 40066 / 39978 / 39969 | within noise of raster |
+| T=32 anchors verbatim instead of modelled | +22 | |
+
+## 3. Where the bits are (raster cost map, causal radius 5.5)
+Top 0.1% / 1% / 5% / 25% of pixels carry 0.8% / 5.4% / 18% / 53% of the bits: the cost is
+diffuse. The cost map shows the cloudy background as uniform noise, object edges as thin
+lines, and flat object interiors as cheaper patches. Noise alone in gen_image.py (sigma
+.28 before flooring) has an entropy of 0.729 bpp = 22767 bytes, so ~17 KB is field detail.
+
+## 4. Upper bound for selected (irregular) anchors
+Anchors given to the decoder for FREE (mask, not transmitted), then raster + look-ahead
+(T=64 base). saved = drop in the rest's bits; own = those pixels' own bits in the base run;
+look-ahead = saved - own (the benefit to the other pixels); needed = what transmitting
+them would cost at least (log2 C(250000, N) for positions + 4 bits per value).
+
+| select | N | saved | own | look-ahead | needed |
+|---|---|---|---|---|---|
+| highest cost | 250 / 1000 / 4000 | 2513 / 8166 / 26058 | 2695 / 8328 / 24943 | -182 / -162 / +1115 | 3851 / 13406 / 45623 |
+| strongest gradient (Sobel) | 250 / 1000 / 4000 | 727 / 2724 / 10313 | 660 / 2469 / 9928 | +67 / +255 / +385 | same |
+| random | 250 / 1000 / 4000 | 313 / 1265 / 4878 | 329 / 1336 / 5061 | -16 / -71 / -183 | same |
+
+Knowing a pixel early helps the other pixels almost nothing beyond its own cost (at most
+~1100 bits for 4000 anchors), so transmitted positions can never pay: selection by edges or
+by cost misses break-even by 10x or more. Only positions the decoder can derive for free
+(lattices, or rules on decoded data) are viable.

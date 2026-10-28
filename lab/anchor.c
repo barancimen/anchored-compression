@@ -77,22 +77,44 @@
 #define SHC 0  // 1: counter contexts shared across levels (level not hashed)
 #endif
 
+#ifndef MIXS
+#define MIXS 0  // mixer weight set: 0 one, 1 per pass type, 2 per activity bucket q/4, 3 type x (q>7)
+#endif
+#ifndef DIR
+#define DIR 0  // 1: two extra Gaussian inputs centred on the means of opposite pairs of the 4 nearest
+#endif
+#ifndef DSC
+#define DSC 1.0  // their sigma = DSC x the main sigma
+#endif
+#ifndef RMODE
+#define RMODE 0  // 1: after the anchors, code the rest in raster order (stencil reaches ahead)
+#endif
+#ifndef RL
+#define RL 2.3  // RMODE: radius of the look-ahead part of the stencil (reads the fill estimate)
+#endif
+#ifndef FILL
+#define FILL 0  // fill estimate of unknown pixels: 0 lattice point below-left, 1 bilinear
+#endif
+#define NI (NC + 1 + 2 * DIR)  // mixer inputs
+
 #define W 500
 #define NPIX (W * W)
 #define NG 40
-#define MAXL 80
+#define MAXL 140
 #define HB 22
 
 typedef struct { int n, dx[MAXL], dy[MAXL]; } Sten;
-static Sten SA, SD, SX;
+static Sten SA, SD, SX, SR;
 
 static unsigned char X[NPIX];  // the image
-static int F[NPIX], K[NPIX];   // F: known value or fill estimate; K: known flag
+static double F[NPIX];  // known value, or fill estimate of an unknown pixel
+static int K[NPIX];     // known flag
 static double E[NPIX];         // |error| of each coded pixel
+static float COST[NPIX];       // bits spent on each pixel (for analysis)
 static double P[1 << HB];
 static unsigned char N[1 << HB];
 static double C[NG][MAXL][MAXL], Bv[NG][MAXL], A[NG][MAXL], V[NG][32];
-static double Wm[NG][NC + 1];
+static double Wm[NG][NI];
 static double gbits[NG];
 static long gcount[NG];
 
@@ -122,6 +144,7 @@ static int cmpd(const void *a, const void *b) {
 }
 
 // kind 0: anchor raster (causal offsets); 1: centres (known: odd/odd, or even/even causal);
+// 3: raster after anchors (causal within r, plus look-ahead within RL);
 // 2: axis pixels (known: dx+dy odd, or dx+dy even causal). Sorted by distance.
 static void mksten(Sten *s, int kind, double r) {
   int t[4 * MAXL * 4][3], n = 0, R = (int)r;
@@ -131,8 +154,10 @@ static void mksten(Sten *s, int kind, double r) {
       if (!d2 || d2 > r * r) continue;
       if (kind == 0) ok = causal;
       else if (kind == 1) ok = (dx & 1 && dy & 1) || (!(dx & 1) && !(dy & 1) && causal);
-      else ok = ((dx + dy) & 1) || causal;
-      if (ok) t[n][0] = d2, t[n][1] = dy, t[n][2] = dx, n++;
+      else if (kind == 2) ok = ((dx + dy) & 1) || causal;
+      else ok = causal || d2 <= RL * RL;
+      // kind 3: causal offsets first, so the 4 nearest used by contexts are real pixels
+      if (ok) t[n][0] = d2 + (kind == 3 && !causal) * 10000, t[n][1] = dy, t[n][2] = dx, n++;
     }
   qsort(t, n, sizeof t[0], cmpd);
   if (n > MAXL) n = MAXL;
@@ -162,12 +187,13 @@ static void code_pixel(int x, int y, int g, Sten *s, int u) {
   int mn = 99, mx = -1;
   double es = 0;
   for (i = 0; i < 4; i++) {
-    int v = F[nb[i]];
+    int v = (int)(F[nb[i]] + .5);
     mn = v < mn ? v : mn, mx = v > mx ? v : mx, es += E[nb[i]];
   }
   int q = (int)fmin(KQ * es + KS * (mx - mn), 31);
   double sg = sqrt(V[gv][q]);
-  int a0 = F[nb[0]], a1 = F[nb[1]], a2 = F[nb[2]], a3 = F[nb[3]], a4 = F[nb[4]], a5 = F[nb[5]];
+#define Q(i) (int)(F[nb[i]] + .5)
+  int a0 = Q(0), a1 = Q(1), a2 = Q(2), a3 = Q(3), a4 = Q(4), a5 = Q(5);
   int rm = (int)fmin(fmax(m * 2 + .5, 0), 31);
   unsigned h[8];
   h[0] = a0 << 12 | a1 << 8 | a2 << 4 | a3;
@@ -176,7 +202,8 @@ static void code_pixel(int x, int y, int g, Sten *s, int u) {
   h[3] = rm << 5 | q;
   h[4] = a0 << 12 | a1 << 8 | a4 << 4 | a5;
   h[5] = a0 << 8 | a2 << 4 | a4;
-  double *w = Wm[MIXG ? g : 0], sx[NC + 1];
+  double *w = Wm[MIXG ? g : MIXS == 1 ? shg(g, 1) : MIXS == 2 ? q / 4 : MIXS == 3 ? shg(g, 1) * 2 + (q > 7) : 0], sx[NI];
+  double md[2] = {(a0 + a3) / 2., (a1 + a2) / 2.};
   int v = X[k], c = 1, lov = 0;
   unsigned H[NC];
   for (int e = 3; e >= 0; e--) {  // remaining values: lov .. lov + 2^(e+1) - 1
@@ -184,6 +211,11 @@ static void code_pixel(int x, int y, int g, Sten *s, int u) {
     double t = cdf(top, m, sg), pg = (t - cdf(mid, m, sg)) / (t - cdf(lov, m, sg) + 1e-30);
     sx[NC] = st(pg);
     double f = w[NC] * sx[NC];
+    for (i = 0; i < 2 * DIR; i++) {
+      t = cdf(top, md[i], sg * DSC);
+      sx[NC + 1 + i] = st((t - cdf(mid, md[i], sg * DSC)) / (t - cdf(lov, md[i], sg * DSC) + 1e-30));
+      f += w[NC + 1 + i] * sx[NC + 1 + i];
+    }
     for (i = 0; i < NC; i++) {
       H[i] = ((h[i] << 4 | c) * 2654435761u ^ (unsigned)(gc * 0x9E3779B1u) ^ (unsigned)i * 0x85EBCA77u) * 2246822519u >> (32 - HB);
       sx[i] = st(P[H[i]]), f += w[i] * sx[i];
@@ -191,8 +223,8 @@ static void code_pixel(int x, int y, int g, Sten *s, int u) {
     double p = 1 / (1 + exp(-f));
     int y1 = bitcode(v >> e & 1, p);
     double pp = p * .9999 + .00005;
-    gbits[g] -= log2(y1 ? pp : 1 - pp);
-    for (i = 0; i <= NC; i++) w[i] += LR * (y1 - p) * sx[i];
+    gbits[g] -= log2(y1 ? pp : 1 - pp), COST[k] -= log2(y1 ? pp : 1 - pp);
+    for (i = 0; i < NI; i++) w[i] += LR * (y1 - p) * sx[i];
     for (i = 0; i < NC; i++) j = H[i], N[j] += N[j] < LIM, P[j] += (y1 - P[j]) / (N[j] + .5);
     c = c * 2 + y1, lov += y1 << e;
   }
@@ -219,10 +251,17 @@ static void code_verbatim(int x, int y) {
   gbits[0] += 4, gcount[0]++;
 }
 
-static void fill(int u) {  // unknown pixels take the value of the lattice point below-left
+static void fill(int u) {  // fill estimate of unknown pixels from the known lattice of step u
+  int last = (W - 1) / u * u;
   for (int y = 0; y < W; y++)
-    for (int x = 0; x < W; x++)
-      if (!K[y * W + x]) F[y * W + x] = F[(y - y % u) * W + x - x % u];
+    for (int x = 0; x < W; x++) {
+      if (K[y * W + x]) continue;
+      int x0 = x - x % u, y0 = y - y % u, x1 = x0 + u > last ? x0 : x0 + u, y1 = y0 + u > last ? y0 : y0 + u;
+      double fx = x1 > x0 ? (double)(x - x0) / u : 0, fy = y1 > y0 ? (double)(y - y0) / u : 0;
+      F[y * W + x] = FILL ? (1 - fy) * ((1 - fx) * F[y0 * W + x0] + fx * F[y0 * W + x1]) +
+                                fy * ((1 - fx) * F[y1 * W + x0] + fx * F[y1 * W + x1])
+                          : F[y0 * W + x0];
+    }
 }
 
 static void reset(void) {
@@ -240,6 +279,25 @@ static void run(void) {
     for (int x = 0; x < W; x += T)
       VERB && T > 1 ? code_verbatim(x, y) : code_pixel(x, y, 0, &SA, T);
   fill(T);
+  if (RMODE) {
+    // probe only (not transmitted): extra anchors from a mask file, given to the model for free
+    static unsigned char mask[NPIX];
+    static int nmask = -1;
+    if (nmask < 0) {
+      FILE *mf = getenv("ANCHMASK") ? fopen(getenv("ANCHMASK"), "rb") : 0;
+      nmask = mf ? (int)fread(mask, 1, NPIX, mf) * 0 : 0;
+      if (mf) fclose(mf);
+      for (int i = 0; i < NPIX; i++) nmask += mask[i] && !K[i];
+      if (nmask) fprintf(stderr, "free mask anchors: %d\n", nmask);
+    }
+    for (int i = 0; i < NPIX; i++)
+      if (mask[i] && !K[i]) F[i] = X[i], K[i] = 1;
+    for (int y = 0; y < W; y++)
+      for (int x = 0; x < W; x++)
+        if (!K[y * W + x]) code_pixel(x, y, 1, &SR, 1);
+    if (!dec) buf[bp++] = (lo >> 24) + 1;
+    return;
+  }
   for (int t = T, lv = 0; t >= 2; t /= 2, lv++) {
     int h = t / 2, g = 1 + 3 * lv;
     for (int y = h; y < W; y += t)
@@ -257,23 +315,25 @@ int main(int argc, char **argv) {
   if (!f || fread(raw, 1, NPIX / 2, f) != NPIX / 2) return fprintf(stderr, "bad image\n"), 1;
   fclose(f);
   for (int i = 0; i < NPIX; i++) X[i] = raw[i / 2] >> (i % 2 ? 0 : 4) & 15;
-  mksten(&SA, 0, RA), mksten(&SD, 1, RD), mksten(&SX, 2, RX);
+  mksten(&SA, 0, RA), mksten(&SD, 1, RD), mksten(&SX, 2, RX), mksten(&SR, 3, RA > RL ? RA : RL);
   buf = malloc(1 << 20);
   reset(), dec = 0, run();
   long alen = bp;
   double tot = 0;
-  printf("stencils: anchor %d, centre %d, axis %d\n", SA.n, SD.n, SX.n);
+  printf("stencils: anchor %d, centre %d, axis %d, raster-after-anchors %d\n", SA.n, SD.n, SX.n, SR.n);
   for (int g = 0; g < NG; g++)
     if (gcount[g]) {
       tot += gbits[g];
       static const char *kind[3] = {"centre", "axis-h", "axis-v"};
       char lab[32];
-      if (g) snprintf(lab, sizeof lab, "t=%d %s", T >> (g - 1) / 3, kind[(g - 1) % 3]);
+      if (g && RMODE) snprintf(lab, sizeof lab, "rest (raster)");
+      else if (g) snprintf(lab, sizeof lab, "t=%d %s", T >> (g - 1) / 3, kind[(g - 1) % 3]);
       else snprintf(lab, sizeof lab, VERB && T > 1 ? "anchors verbatim" : "anchors");
       printf("  %-16s %7ld px %9.0f bits %6.3f bpp\n", lab, gcount[g], gbits[g], gbits[g] / gcount[g]);
     }
   printf("archive %ld bytes (ideal %.0f), %.4f bpp\n", alen, tot / 8, alen * 8.0 / NPIX);
   if (argc > 2) { FILE *o = fopen(argv[2], "wb"); fwrite(buf, 1, alen, o); fclose(o); }
+  if (getenv("COSTMAP")) { FILE *o = fopen(getenv("COSTMAP"), "wb"); fwrite(COST, 4, NPIX, o); fclose(o); }
 #ifdef VERIFY
   unsigned char orig[NPIX];
   memcpy(orig, X, NPIX);
