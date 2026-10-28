@@ -35,7 +35,7 @@ recipe inside the decompressor, saves 119 archive bytes but costs 1809 bytes of 
 S = 2 x zipped program + archive + charged command-line characters (34-58), C = D form.
 Every row is a verified round trip in this repo's harness (`results.tsv`).
 Kinds: **anchor** = this project's anchor candidates; **ref** = the earlier raster project's
-algorithms, copied here (`000` is its best, `r00..r16` the rest); **sim** = source simulation.
+algorithms, copied here (`000` is its best, `r00` and `r03..r16` the rest); **sim** = source simulation.
 
 | S | candidate | kind | archive | zip | what it is |
 |---|---|---|---|---|---|
@@ -60,7 +60,6 @@ algorithms, copied here (`000` is its best, `r00..r16` the rest); **sim** = sour
 | 43803 | `r05_cm_v3` | ref | 40451 | 1647 | v3: 4 contexts + Gaussian/OLS input |
 | 44334 | `r03_cm_v1` | ref | 42016 | 1130 | v1: 8 neighbour contexts, no linear predictor |
 | 45786 | `r04_cm_ols` | ref | 41628 | 2050 | v2: v1 + OLS predictor (first scored here) |
-| 63488 | `r01_py_lzma` | ref | 62870 | 289 | Python standard-library LZMA |
 | 125336 | `r00_store` | ref | 125000 | 151 | stored verbatim |
 
 `r04_cm_ols` is copied unchanged except for one removed line that dumped a cost map to a
@@ -124,7 +123,7 @@ lines, rings and stripes mostly vanish. Details: `inpaint/README.md`.
 | `program.md` | the loop protocol, the design families and the reference points |
 | `results.tsv`, `best.json` | every scored experiment; the best anchor candidate |
 | `candidates/NNN_*` | this project's candidates: `src.c` (readable), `p.c` (minified, measured), `cand.json`, `submission/P.zip` |
-| `candidates/r00..r16` | the earlier raster project's algorithms |
+| `candidates/r00`, `r03..r16` | the earlier raster project's algorithms |
 | `lab/anchor.c`, `lab/sweep.sh` | research coder with every anchor order as a `-D` knob |
 | `lab/qt.c`, `lab/qtsweep.sh`, `lab/qtsearch.py` | quadtree template, knob sweeps, counter-context search (`lab/qtsearch.log`) |
 | `lab/prime.c`, `lab/sim.c`, `lab/train/` | priming probe, C port of the generator, 8 generator images for training |

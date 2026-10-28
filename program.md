@@ -24,12 +24,17 @@ milestones are checked on them with `lab/eval_on.py`.
   Every character of every executed command line is charged. Decompression runs in a fresh
   sandbox without network, with the project directory hidden, and must reproduce
   `image.bin` byte for byte.
+- Libraries: only the language's basic runtime is free, as in the Hutter rules ("standard
+  libraries as for file I/O"). For C that is the standard library's input/output and maths
+  (`stdio.h`, `stdlib.h`, `math.h`). Anything that compresses or models data (zlib, LZMA,
+  image codecs, ...) must be part of the counted program. The harness cannot check this, so
+  every candidate is reviewed against it.
 
 ## Reference points
 `candidates/000_raster_ref` is the best compressor of an earlier, separate project (raster
 scan context mixing, no anchors), copied here unchanged and scored with `--ref`. It is the bar
 to compare against and never becomes `best.json`. Its model and coder may be reused inside
-anchor candidates. `candidates/r00..r16` are that project's other algorithms (store, LZMA,
+anchor candidates. `candidates/r00` and `r03..r16` are that project's other algorithms (store
 and every context-mixing version), copied and scored the same way. `006_simprior` (training
 the model on simulated images first) is not an anchor method either, so it is scored with
 `--ref` too.

@@ -6,7 +6,6 @@ exp	status	S	code	L_A	charges	bpp	t_comp	t_dec	rss_mb	description
 003_lattice_lookahead_t128	keep	41929	2350	39529	50	1.2649	39.9	39.6	41	001 with 4x4 anchor lattice (T=128, 16 anchors) instead of 8x8
 005_quadtree_golf	discard	42313	2368	39895	50	1.2766	15.3	14.6	41	004 golfed (scaled stencil offsets, flat variance table, abs reflection, short names) + RLS forgetting .9995, bucket scale 2, variance rate 1/300
 r00_store	ref	125336	302	125000	34	4.0000	0.0	0.0	20	earlier raster project: store verbatim (C=D)
-r01_py_lzma	ref	63488	578	62870	40	2.0118	0.2	0.1	77	earlier raster project: python lzma raw (stdlib codec, grey area)
 r03_cm_v1	ref	44334	2260	42016	58	1.3445	0.4	0.4	46	earlier raster project: CM v1: 8 neighbour ctx (W,N,NW,NE,WW,NN), float mixer per node, APM(node,N)
 r04_cm_ols	ref	45786	4100	41628	58	1.3321	1.0	0.9	55	earlier raster project: CM v2 (never scored there): v1 + online OLS predictor -> discretized-logistic input + mu-keyed contexts (cost-map dump removed)
 r05_cm_v3	ref	43803	3294	40451	58	1.2944	0.8	0.8	30	earlier raster project: v3: pruned to 4 ctx + Gaussian/OLS input, single mixer set lr .001, edge replication

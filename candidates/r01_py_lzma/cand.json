@@ -1,2 +1,0 @@
-{"form": "same", "P": {"files": ["p.py"]},
- "comp": "python3 p.py<image.bin>a", "archive": ["a"], "decomp": "python3 p.py<a>o", "output": "o"}
