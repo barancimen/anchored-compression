@@ -1,0 +1,2 @@
+{"form": "same", "P": {"files": ["p.c"], "minify": "c", "build": ["make p"]},
+ "comp": "./p<image.bin>a", "archive": ["a"], "decomp": "./p<a>o", "output": "o"}

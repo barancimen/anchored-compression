@@ -5,3 +5,19 @@ exp	status	S	code	L_A	charges	bpp	t_comp	t_dec	rss_mb	description
 004_quadtree_ctx	discard	42417	2428	39939	50	1.2780	14.7	14.3	41	quadtree 002 + transposed scan + searched contexts (v9,v1,v0)(v0,v1,v10)(v2,v3)(m,q)(v7,v11,v4,v5)
 003_lattice_lookahead_t128	keep	41929	2350	39529	50	1.2649	39.9	39.6	41	001 with 4x4 anchor lattice (T=128, 16 anchors) instead of 8x8
 005_quadtree_golf	discard	42313	2368	39895	50	1.2766	15.3	14.6	41	004 golfed (scaled stencil offsets, flat variance table, abs reflection, short names) + RLS forgetting .9995, bucket scale 2, variance rate 1/300
+r00_store	ref	125336	302	125000	34	4.0000	0.0	0.0	20	earlier raster project: store verbatim (C=D)
+r01_py_lzma	ref	63488	578	62870	40	2.0118	0.2	0.1	77	earlier raster project: python lzma raw (stdlib codec, grey area)
+r03_cm_v1	ref	44334	2260	42016	58	1.3445	0.4	0.4	46	earlier raster project: CM v1: 8 neighbour ctx (W,N,NW,NE,WW,NN), float mixer per node, APM(node,N)
+r04_cm_ols	ref	45786	4100	41628	58	1.3321	1.0	0.9	55	earlier raster project: CM v2 (never scored there): v1 + online OLS predictor -> discretized-logistic input + mu-keyed contexts (cost-map dump removed)
+r05_cm_v3	ref	43803	3294	40451	58	1.2944	0.8	0.8	30	earlier raster project: v3: pruned to 4 ctx + Gaussian/OLS input, single mixer set lr .001, edge replication
+r06_cm_v4	ref	42854	2594	40202	58	1.2865	1.5	1.6	30	earlier raster project: v4: size-conscious rewrite; R=4 OLS (41 inputs) via 1 Gauss-Seidel sweep; no APM; LAM .999
+r07_cm_v5	ref	42512	2250	40204	58	1.2865	1.6	2.0	29	earlier raster project: v5: golfed v4 (float counters, EMA variance, fwrite output, tighter minify)
+r08_cm_v6	ref	42250	2162	40038	50	1.2812	29.0	23.2	25	earlier raster project: v6: OLS radius 6 (84 in), lambda .9997, nu .03, lim 60, no biases, init 8; build without -O2
+r09_cm_v7	ref	42197	2116	40031	50	1.2810	18.5	18.9	41	earlier raster project: v7 (never scored there): golf step later folded into v8
+r10_cm_v8	ref	41950	2090	39810	50	1.2739	19.0	18.3	41	earlier raster project: v8: golf + greedy-searched contexts (W,WW,NEE)(N,NE,NN)(W,N,NW)+derived 6-nb
+r11_cm_v9	ref	41923	2054	39819	50	1.2742	16.7	16.9	40	earlier raster project: v9: golf (globals as int, doubled node index, merged update loops, RHS folded into RLS matrix)
+r12_cm_v10	ref	41919	2034	39835	50	1.2747	17.5	16.6	40	earlier raster project: v10: golf (84-neighbour window as one flat loop over a 7x13 block)
+r13_cm_v11	ref	41847	2060	39737	50	1.2716	17.3	17.8	41	earlier raster project: v11: + 5th counter context (WWW,NEEE,NE) found by search
+r14_cm_v12	ref	41821	2034	39737	50	1.2716	17.0	16.8	40	earlier raster project: v12: micro-golf (OR-combined hash key, offset folded into Gaussian CDF)
+r15_cm_v13	ref	41652	2054	39548	50	1.2655	17.4	16.8	40	earlier raster project: v13: scan the image transposed+mirrored (best of 8 orientations)
+r16_cm_v14	ref	41638	2054	39534	50	1.2651	16.9	16.8	41	earlier raster project: v14: context (N,NE,NN)->(N,NE,NNE) from local re-search under the new scan order
