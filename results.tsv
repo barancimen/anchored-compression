@@ -1,3 +1,4 @@
 exp	status	S	code	L_A	charges	bpp	t_comp	t_dec	rss_mb	description
 000_raster_ref	ref	41616	2054	39512	50	1.2644	25.3	25.7	41	REFERENCE: earlier project's best raster-scan CM (no anchors), copied unchanged
 001_lattice_lookahead	keep	41968	2352	39566	50	1.2661	37.9	38.7	41	anchors: 8x8 lattice (step 64, scan coords) stored verbatim 1 byte each; bilinear anchor fill; RLS stencil 112 causal + 23 look-ahead cells; model/coder from 000_raster_ref
+002_quadtree	discard	42644	2394	40200	50	1.2864	14.6	14.2	41	quadtree: anchors = even/even lattice (raster over lattice), then centres, then edge midpoints; per-pass stencils radius 6 (56/82/46), RLS on residual from mean of 4 nearest; 5 counters + Gaussian, shared mixer
