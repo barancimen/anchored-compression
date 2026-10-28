@@ -92,6 +92,14 @@ real ones and work as well as real ones for training.
 - **Result:** archive 39393 (-119), S 43425 (+1809 vs the reference); held-out archives
   -21 to -85.
 
+## Inpainting from anchors (`inpaint/`)
+The quadtree model used generatively: `image.bin` is reduced to its step-8 anchor lattice
+(3,969 pixels, 1.6%) and the model, trained only on the 8 images in `lab/train` and on those
+anchors, fills in the rest by drawing every bit from its own probabilities.
+`inpaint/animation.gif` loops through 100 samples at 25 fps (bare 500x500 frames). The samples
+keep the large-scale layout the anchors fix and redraw everything finer than 8 pixels; thin
+lines, rings and stripes mostly vanish. Details: `inpaint/README.md`.
+
 ## What was tried (details and every number in `lab/notes.md`)
 - **Number of anchors:** lattice steps T = 1 (plain raster) to 256 for the quadtree, the
   row hierarchy and the look-ahead design; anchors verbatim ("stored in full") vs modelled
@@ -122,6 +130,7 @@ real ones and work as well as real ones for training.
 | `lab/prime.c`, `lab/sim.c`, `lab/train/` | priming probe, C port of the generator, 8 generator images for training |
 | `lab/notes.md` | all probes with numbers, including rejected ones |
 | `lab/eval_on.py`, `lab/generalization.tsv` | scoring on held-out images |
+| `inpaint/` | inpainting from the anchors with the quadtree model; `animation.gif` |
 
 ## Reproduce
 

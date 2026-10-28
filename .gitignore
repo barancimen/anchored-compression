@@ -3,3 +3,6 @@ __pycache__/
 a.out
 lab/build/
 *.o
+# inpainting: binary and samples (run.sh regenerates them)
+inpaint/inpaint
+inpaint/samples/sample_*.bin
