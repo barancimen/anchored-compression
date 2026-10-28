@@ -65,3 +65,32 @@ Knowing a pixel early helps the other pixels almost nothing beyond its own cost 
 ~1100 bits for 4000 anchors), so transmitted positions can never pay: selection by edges or
 by cost misses break-even by 10x or more. Only positions the decoder can derive for free
 (lattices, or rules on decoded data) are viable.
+
+## 5. Row hierarchy (ROWS=1) and where the quadtree loses
+| probe | result | verdict |
+|---|---|---|
+| whole anchor rows every T rows, rows refined by halving: T=8 / 4 / 2 | 40528 / 40403 / 40276 | worse than raster (40000) |
+| T=2 rows with radius 7.5 stencils | 40236 | reject |
+
+Quadtree (T=4, best lab knobs, 40261) vs raster (radius 7.5, 40000), same pixels:
+
+| pixels | n | quadtree bpp | raster bpp | quadtree - raster |
+|---|---|---|---|---|
+| anchors (x, y % 4 == 0) | 15625 | 1.952 | 1.286 | +1299 B |
+| t=4 centres | 15625 | 1.576 | 1.297 | +544 B |
+| t=4 edge midpoints | 31250 | 1.413 | 1.286 | +498 B |
+| t=2 centres | 62500 | 1.267 | 1.275 | -63 B |
+| t=2 edge midpoints | 125000 | 1.149 | 1.278 | -2018 B |
+| all | 250000 | 1.288 | 1.280 | +260 B |
+
+The two-sided finest level is much cheaper than raster, but the anchors and coarse levels
+pay almost exactly that back: information moves between levels, it does not disappear.
+
+## 6. Candidates (family A: look-ahead on the reference model; family B: quadtree)
+| probe | archive | verdict |
+|---|---|---|
+| 001 build: T=64, look-ahead L=135 | 39566 | scored S 41968 |
+| 001 with L=112 (anchors, no look-ahead) / L=120 / L=150 | 39565 / 39564 / 39569 | look-ahead adds nothing |
+| 001 with T=32 / T=128 | 39721 / 39529 | fewer anchors is better |
+| 002 quadtree, T=2, radius-6 stencils | 40200 | scored S 42644 |
+| 002 under the 8 scan orientations | 40064 (transposed) .. 40217 | transposed: -136 |

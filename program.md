@@ -28,7 +28,17 @@ milestones are checked on them with `lab/eval_on.py`.
 ## Reference point
 `candidates/000_raster_ref` is the best compressor of an earlier, separate project (raster
 scan context mixing, no anchors), copied here unchanged and scored with `--ref`. It is the bar
-to compare against, not a starting point: it never becomes `best.json`.
+to compare against and never becomes `best.json`. Its model and coder may be reused inside
+anchor candidates.
+
+## Design families
+- **A. Anchors as side information:** a lattice of anchors is stored first; the rest is
+  coded in scan order by a model whose stencil also reads ahead into an interpolation of the
+  anchors (`001_lattice_lookahead`, built on the reference's model).
+- **B. Anchors + hierarchical refinement:** anchors are a coarse lattice and every other
+  pixel is coded coarse-to-fine with known neighbours on all sides (`002_quadtree`).
+A family's next experiment may branch from that family's best candidate even when the
+other family holds `best.json`; `results.tsv` still marks it against the global best.
 
 ## Loop
 1. Pick one idea (anchor selection, anchor storage, conditional model, coder, golf, ...).
