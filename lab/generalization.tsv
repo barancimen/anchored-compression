@@ -11,3 +11,7 @@ heldout/h3/image.bin	003_lattice_lookahead_t128	ok	41515	2350	39115	50	1.2517
 heldout/h3/image.bin	005_quadtree_golf	ok	41938	2368	39520	50	1.2646
 heldout/h4/image.bin	003_lattice_lookahead_t128	ok	40573	2350	38173	50	1.2215
 heldout/h4/image.bin	005_quadtree_golf	ok	40935	2368	38517	50	1.2325
+heldout/h1/image.bin	006_simprior	ok	43748	3974	39716	58	1.2709
+heldout/h2/image.bin	006_simprior	ok	43017	3974	38985	58	1.2475
+heldout/h3/image.bin	006_simprior	ok	43109	3974	39077	58	1.2505
+heldout/h4/image.bin	006_simprior	ok	42113	3974	38081	58	1.2186

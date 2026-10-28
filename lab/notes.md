@@ -103,3 +103,24 @@ pay almost exactly that back: information moves between levels, it does not disa
 | forgetting .9995 + bucket scale 3->2 + variance rate 1/500 -> 1/300 | 39939 -> 39895 | keep (no code cost) |
 | same on held-out h1 / h2 / h3 / h4 | -44 / -43 / -31 / -30 | transfers |
 | 005 = 004 golfed + those constants: p.c 1846 -> 1737 chars, zip 1214 -> 1184 | 39895 | scored S 42313 (best of family B) |
+
+## 7. Simulating the source (learning moved out of the archive)
+Idea: the decoder generates images from the same recipe and trains the model on them before
+coding, so less learning is paid for inside the archive. Probe: `lab/prime.c` (the raster
+reference model, primed on images, then coding the target).
+
+| probe | image.bin archive | verdict |
+|---|---|---|
+| cold (= 000_raster_ref) | 39512 | |
+| primed on 1 / 2 / 4 real generator images (perfect simulator, lab/train) | 39423 / 39422 / 39422 | ceiling ~ -90 |
+| counter limit 255: cold / 4 / 8 images | 39531 / 39444 / 39456 | slower learning doesn't use more data |
+| counter limit 255 + RLS forgetting .9999: cold / 4 / 8 | 39569 / 39482 / 39491 | |
+| RLS forgetting .9999: cold / 4 / 8 | 39550 / 39460 / 39468 | |
+| C port of gen_image.py (lab/sim.c), primed on sim image 0 / 1 / 0-2 | 39427 / 39512 / 39421 | sim images work as well as real ones |
+| held-out h1: cold / sim-primed / real-primed | 39783 / 39710 / 39667 | |
+| held-out h2: cold / sim-primed / real-primed | 39070 / 38983 / 38978 | |
+
+The model adapts fast (RLS memory ~3300 pixels, counters ~80 updates), so earlier images
+only give it a warm start: at most ~90-120 bytes. The simulator (3 random fields by FFT,
+6 object kinds, percentile scaling) is 960 zipped bytes of extra program, counted twice.
+Scored as `006_simprior`: archive 39393 (-119), program 1987 zipped (+960), S 43425 (+1809).

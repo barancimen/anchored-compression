@@ -9,7 +9,8 @@ best in archive size, and the anchor machinery always adds program code, which c
 The best anchor compressor is 313 bytes behind the no-anchor reference (S 41929 vs 41616), and
 it gets there by using as few anchors as possible. The best *genuine* anchor algorithm, a
 lattice of anchors refined as a quadtree, is 697 bytes behind (S 42313). Both gaps hold on
-four held-out images.
+four held-out images. A second idea, training the model on images simulated from the same
+recipe inside the decompressor, saves 119 archive bytes but costs 1809 bytes of S.
 
 ## Why
 1. **Coding order doesn't change the total information.** By the chain rule, coding anchors
@@ -29,36 +30,67 @@ four held-out images.
    of the cost is sensor noise (0.73 bits/pixel by itself) and fine texture of the random
    field, spread evenly over the image, which no anchor placement can concentrate.
 
-## Results on `image.bin` (Hutter total S, bytes; lower is better)
+## Score table: `image.bin` (Hutter total S, bytes; lower is better)
 
-S = 2 x zipped program + archive + charged command-line characters (50), C = D form.
+S = 2 x zipped program + archive + charged command-line characters (34-58), C = D form.
+Every row is a verified round trip in this repo's harness (`results.tsv`).
+Kinds: **anchor** = this project's anchor candidates; **ref** = the earlier raster project's
+algorithms, copied here (`000` is its best, `r00..r16` the rest); **sim** = source simulation.
 
-| candidate | design | archive | zip | S | status |
+| S | candidate | kind | archive | zip | what it is |
 |---|---|---|---|---|---|
-| `000_raster_ref` | reference: earlier project's raster coder, no anchors | 39512 | 1027 | **41616** | ref |
-| `001_lattice_lookahead` | A: 8x8 verbatim anchors, model reads ahead into their interpolation | 39566 | 1176 | 41968 | keep |
-| `002_quadtree` | B: even/even anchor lattice, then cell centres, then edge midpoints | 40200 | 1197 | 42644 | discard |
-| `003_lattice_lookahead_t128` | A with a 4x4 lattice (16 anchors) | 39529 | 1175 | **41929** | keep (best) |
-| `004_quadtree_ctx` | B, transposed scan, searched counter contexts | 39939 | 1214 | 42417 | discard |
-| `005_quadtree_golf` | B golfed, retuned forgetting / variance constants | 39895 | 1184 | 42313 | discard (best of B) |
+| **41616** | `000_raster_ref` | ref | 39512 | 1027 | raster context mixing, 112-neighbour RLS (earlier project's v15) |
+| 41638 | `r16_cm_v14` | ref | 39534 | 1027 | v14: context re-searched under the transposed scan |
+| 41652 | `r15_cm_v13` | ref | 39548 | 1027 | v13: transposed + mirrored scan |
+| 41821 | `r14_cm_v12` | ref | 39737 | 1017 | v12: micro-golf |
+| 41847 | `r13_cm_v11` | ref | 39737 | 1030 | v11: 5th counter context |
+| 41919 | `r12_cm_v10` | ref | 39835 | 1017 | v10: golf |
+| 41923 | `r11_cm_v9` | ref | 39819 | 1027 | v9: golf |
+| **41929** | `003_lattice_lookahead_t128` | anchor | 39529 | 1175 | best anchor compressor: 16 verbatim anchors + look-ahead |
+| 41950 | `r10_cm_v8` | ref | 39810 | 1045 | v8: searched counter contexts |
+| 41968 | `001_lattice_lookahead` | anchor | 39566 | 1176 | 64 verbatim anchors + look-ahead |
+| 42197 | `r09_cm_v7` | ref | 40031 | 1058 | v7: golf step (first scored here) |
+| 42250 | `r08_cm_v6` | ref | 40038 | 1081 | v6: RLS radius 6 (84 inputs) |
+| **42313** | `005_quadtree_golf` | anchor | 39895 | 1184 | best quadtree: anchor lattice + refinement |
+| 42417 | `004_quadtree_ctx` | anchor | 39939 | 1214 | quadtree, transposed, searched contexts |
+| 42512 | `r07_cm_v5` | ref | 40204 | 1125 | v5: golfed v4 |
+| 42644 | `002_quadtree` | anchor | 40200 | 1197 | first quadtree |
+| 42854 | `r06_cm_v4` | ref | 40202 | 1297 | v4: RLS radius 4 (41 inputs) |
+| 43425 | `006_simprior` | sim | 39393 | 1987 | `000` trained on 3 simulated images before coding |
+| 43803 | `r05_cm_v3` | ref | 40451 | 1647 | v3: 4 contexts + Gaussian/OLS input |
+| 44334 | `r03_cm_v1` | ref | 42016 | 1130 | v1: 8 neighbour contexts, no linear predictor |
+| 45786 | `r04_cm_ols` | ref | 41628 | 2050 | v2: v1 + OLS predictor (first scored here) |
+| 63488 | `r01_py_lzma` | ref | 62870 | 289 | Python standard-library LZMA |
+| 125336 | `r00_store` | ref | 125000 | 151 | stored verbatim |
 
-Family A: anchors are side information for a raster model. Its look-ahead into the anchors'
-interpolation adds nothing measurable (39565 bytes without it vs 39566 with it), and fewer
-anchors always scored better (T=32 / 64 / 128: 39721 / 39566 / 39529). Its optimum is the
-reference with no anchors at all. Family B is the genuine anchor algorithm.
+`r04_cm_ols` is copied unchanged except for one removed line that dumped a cost map to a
+scratch path (instrumentation). The earlier project's sandbox check (a "compressor" that
+reads the original from an absolute path) is not an algorithm and was not copied.
 
 ## Held-out images (`lab/generalization.tsv`; never used for tuning)
 
-| image | reference S | 003 S (diff) | 005 S (diff) |
-|---|---|---|---|
-| h1 | 41887 | 42200 (+313) | 42611 (+724) |
-| h2 | 41174 | 41494 (+320) | 41902 (+728) |
-| h3 | 41202 | 41515 (+313) | 41938 (+736) |
-| h4 | 40261 | 40573 (+312) | 40935 (+674) |
+| image | `000` reference | `003` best anchor | `005` best quadtree | `006` simulation |
+|---|---|---|---|---|
+| h1 | 41887 | 42200 (+313) | 42611 (+724) | 43748 (+1861) |
+| h2 | 41174 | 41494 (+320) | 41902 (+728) | 43017 (+1843) |
+| h3 | 41202 | 41515 (+313) | 41938 (+736) | 43109 (+1907) |
+| h4 | 40261 | 40573 (+312) | 40935 (+674) | 42113 (+1852) |
 
-The gaps on `image.bin` (+313, +697) hold on every held-out image, so the tuning did not
-overfit. The quadtree's searched contexts and constants each saved bytes on held-out images
-too (`lab/notes.md`).
+The gaps on `image.bin` (+313, +697, +1809) hold on every held-out image.
+
+## Simulating the source (`006_simprior`)
+Idea: let the decompressor generate images from the same recipe and train the model on them
+before decoding, so the model's learning is paid in CPU time instead of archive bytes.
+`lab/sim.c` is a C port of `gen_image.py`: three random fields made by FFT, the light
+gradient, the six object kinds, percentile scaling, sensor noise. Its images look like the
+real ones and work as well as real ones for training.
+- **The ceiling is low.** Training on 1 to 8 *real* generator images (a perfect simulator)
+  saves at most ~90 bytes on `image.bin`. The model adapts within a few thousand pixels
+  (least-squares memory ~3300 pixels, counters ~80 updates), so earlier images only give it
+  a warm start; settings that remember longer get worse, not better.
+- **The simulator is expensive.** It adds 960 zipped bytes of program, counted twice.
+- **Result:** archive 39393 (-119), S 43425 (+1809 vs the reference); held-out archives
+  -21 to -85.
 
 ## What was tried (details and every number in `lab/notes.md`)
 - **Number of anchors:** lattice steps T = 1 (plain raster) to 256 for the quadtree, the
@@ -70,6 +102,8 @@ too (`lab/notes.md`).
   a local search over counter contexts.
 - **Selection:** upper-bound tests with free anchors chosen by coding cost (an iterative
   cost-map selection), by edge strength and at random (point 2 above); scan orientation.
+- **Source simulation:** priming with real and simulated images, with faster and slower
+  learning settings (section above).
 
 ## Layout
 
@@ -79,11 +113,13 @@ too (`lab/notes.md`).
 | `gen_image.py` | the image generator, unchanged |
 | `heldout/h1..h4` | four more images from unchanged copies of `gen_image.py` |
 | `harness/evaluate.py` | Hutter-rule scorer (sandboxed decompression, charged command lines, `--ref`) |
-| `program.md` | the loop protocol and the two design families |
-| `results.tsv`, `best.json` | every scored experiment; the current best |
-| `candidates/NNN_*` | `src.c` (readable), `p.c` (minified, measured), `cand.json`, `submission/P.zip` |
+| `program.md` | the loop protocol, the design families and the reference points |
+| `results.tsv`, `best.json` | every scored experiment; the best anchor candidate |
+| `candidates/NNN_*` | this project's candidates: `src.c` (readable), `p.c` (minified, measured), `cand.json`, `submission/P.zip` |
+| `candidates/r00..r16` | the earlier raster project's algorithms |
 | `lab/anchor.c`, `lab/sweep.sh` | research coder with every anchor order as a `-D` knob |
 | `lab/qt.c`, `lab/qtsweep.sh`, `lab/qtsearch.py` | quadtree template, knob sweeps, counter-context search (`lab/qtsearch.log`) |
+| `lab/prime.c`, `lab/sim.c`, `lab/train/` | priming probe, C port of the generator, 8 generator images for training |
 | `lab/notes.md` | all probes with numbers, including rejected ones |
 | `lab/eval_on.py`, `lab/generalization.tsv` | scoring on held-out images |
 
@@ -92,6 +128,8 @@ too (`lab/notes.md`).
 ```sh
 export HP_SCRATCH=/some/dir/outside/this/repo     # decompression runs with the repo hidden
 python3 harness/evaluate.py candidates/005_quadtree_golf          # S on image.bin
+python3 harness/evaluate.py candidates/006_simprior --ref         # reference-type rows
 python3 lab/eval_on.py heldout/h2/image.bin candidates/005_quadtree_golf
 cc -O2 -DT=4 -DRES=1 -DSHC=1 -DSHV=1 -o anchor lab/anchor.c -lm && ./anchor image.bin
+cc -O2 -o prime lab/prime.c -lm && ./prime image.bin lab/train/t01/image.bin   # priming
 ```

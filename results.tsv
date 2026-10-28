@@ -21,3 +21,4 @@ r13_cm_v11	ref	41847	2060	39737	50	1.2716	17.3	17.8	41	earlier raster project: v
 r14_cm_v12	ref	41821	2034	39737	50	1.2716	17.0	16.8	40	earlier raster project: v12: micro-golf (OR-combined hash key, offset folded into Gaussian CDF)
 r15_cm_v13	ref	41652	2054	39548	50	1.2655	17.4	16.8	40	earlier raster project: v13: scan the image transposed+mirrored (best of 8 orientations)
 r16_cm_v14	ref	41638	2054	39534	50	1.2651	16.9	16.8	41	earlier raster project: v14: context (N,NE,NN)->(N,NE,NNE) from local re-search under the new scan order
+006_simprior	ref	43425	3974	39393	58	1.2606	34.0	33.8	53	source-simulation prior (not anchors): 000_raster_ref model trained first on 3 images from an embedded C port of gen_image.py (fixed seed), then codes; built with -O2

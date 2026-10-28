@@ -25,11 +25,14 @@ milestones are checked on them with `lab/eval_on.py`.
   sandbox without network, with the project directory hidden, and must reproduce
   `image.bin` byte for byte.
 
-## Reference point
+## Reference points
 `candidates/000_raster_ref` is the best compressor of an earlier, separate project (raster
 scan context mixing, no anchors), copied here unchanged and scored with `--ref`. It is the bar
 to compare against and never becomes `best.json`. Its model and coder may be reused inside
-anchor candidates.
+anchor candidates. `candidates/r00..r16` are that project's other algorithms (store, LZMA,
+and every context-mixing version), copied and scored the same way. `006_simprior` (training
+the model on simulated images first) is not an anchor method either, so it is scored with
+`--ref` too.
 
 ## Design families
 - **A. Anchors as side information:** a lattice of anchors is stored first; the rest is
