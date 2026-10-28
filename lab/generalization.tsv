@@ -3,3 +3,11 @@ heldout/h1/image.bin	000_raster_ref	ok	41887	2054	39783	50	1.2731
 heldout/h2/image.bin	000_raster_ref	ok	41174	2054	39070	50	1.2502
 heldout/h3/image.bin	000_raster_ref	ok	41202	2054	39098	50	1.2511
 heldout/h4/image.bin	000_raster_ref	ok	40261	2054	38157	50	1.2210
+heldout/h1/image.bin	003_lattice_lookahead_t128	ok	42200	2350	39800	50	1.2736
+heldout/h1/image.bin	005_quadtree_golf	ok	42611	2368	40193	50	1.2862
+heldout/h2/image.bin	003_lattice_lookahead_t128	ok	41494	2350	39094	50	1.2510
+heldout/h2/image.bin	005_quadtree_golf	ok	41902	2368	39484	50	1.2635
+heldout/h3/image.bin	003_lattice_lookahead_t128	ok	41515	2350	39115	50	1.2517
+heldout/h3/image.bin	005_quadtree_golf	ok	41938	2368	39520	50	1.2646
+heldout/h4/image.bin	003_lattice_lookahead_t128	ok	40573	2350	38173	50	1.2215
+heldout/h4/image.bin	005_quadtree_golf	ok	40935	2368	38517	50	1.2325
