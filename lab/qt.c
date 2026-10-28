@@ -18,13 +18,37 @@
 #include <stdio.h>
 #include <math.h>
 #define F(i, n) for (i = 0; i < n; i++)
-#define Z 96  // max stencil length
-#ifndef CX0
-#define CX0 r[0] << 12 | r[1] << 8 | r[2] << 4 | r[3]
-#define CX1 r[0] << 4 | r[1]
+#define Z 160  // max stencil length
+#ifndef CX0  // defaults: the contexts found by lab/qtsearch.py (candidate 004)
+#define CX0 r[9] << 8 | r[1] << 4 | r[0]
+#define CX1 r[0] << 8 | r[1] << 4 | r[10]
 #define CX2 r[2] << 4 | r[3]
 #define CX3 (int)(m * 2 + .5) << 5 | q
-#define CX4 r[0] << 12 | r[1] << 8 | r[4] << 4 | r[5]
+#define CX4 r[7] << 12 | r[11] << 8 | r[4] << 4 | r[5]
+#endif
+#ifndef RB
+#define RB 37  // stencil: offsets with dx^2 + dy^2 < RB inside the box |dx|, |dy| <= BOX
+#endif
+#ifndef BOX
+#define BOX 6
+#endif
+#ifndef LR
+#define LR .001
+#endif
+#ifndef LIM
+#define LIM 80
+#endif
+#ifndef LAM
+#define LAM .9997
+#endif
+#ifndef NU
+#define NU 100
+#endif
+#ifndef KQ
+#define KQ 3
+#endif
+#ifndef VR
+#define VR 500
 #endif
 typedef double D;
 unsigned char B[1 << 17], O[125000], N[1 << 22];
@@ -48,9 +72,9 @@ int main() {
   // stencils: g = 0 causal; g = 1 dx + dy odd, or causal; g = 2 dx, dy both odd, or both
   // even and causal. Offsets with dx^2 + dy^2 = e for e = 1, 2, ... (nearest first)
   F(g, 3) {
-    for (e = 1; e < 37; e++)
-      for (y = -6; y < 7; y++)
-        for (x = -6; x < 7; x++)
+    for (e = 1; e < RB; e++)
+      for (y = -BOX; y <= BOX; y++)
+        for (x = -BOX; x <= BOX; x++)
           if (x * x + y * y == e && (c = y < 0 || !y && x < 0, g ? g & 1 ? (x + y) & 1 || c : x & y & 1 || !((x | y) & 1) && c : c))
             sx[g][n[g]] = x, sy[g][n[g]++] = y;
     a[g][n[g]] = -1;
@@ -63,7 +87,7 @@ int main() {
     b = (o[0] + o[1] + o[2] + o[3]) / 4;
     m = b;
     F(i, L) m += a[g][i] * (o[i] -= b);
-    q = fmin((E[r[0]] + E[r[1]] + E[r[2]] + E[r[3]]) * 3, 31);
+    q = fmin((E[r[0]] + E[r[1]] + E[r[2]] + E[r[3]]) * KQ, 31);
     sg = sqrt(V[g][q] * 2);
     F(i, 12) r[i] = I[r[i]];
     h[0] = CX0;
@@ -86,18 +110,18 @@ int main() {
       bt = d ? X <= M : v >> e & 1;
       bt ? hi = M : (lo = M + 1);
       for (; (lo ^ hi) < 1 << 24; lo <<= 8, hi = hi << 8 | 255) d ? X = X << 8 | B[u++] : putchar(hi >> 24);
-      F(i, 6) w[i] += .001 * (bt - t) * s[i], j = H[i], N[j] += N[j] < 80, P[j] += (bt - P[j]) / (N[j] + .5);
+      F(i, 6) w[i] += LR * (bt - t) * s[i], j = H[i], N[j] += N[j] < LIM, P[j] += (bt - P[j]) / (N[j] + .5);
     }
     I[k] = c -= 16;
     O[z / 2] |= c << 4 - z % 2 * 4;
     E[k] = fabs(c - m);
-    V[g][q] += (E[k] * E[k] - V[g][q]) / 500;
+    V[g][q] += (E[k] * E[k] - V[g][q]) / VR;
     // RLS sums with forgetting .9997 (regulariser 100), then one Gauss-Seidel sweep
     o[L] = c - b;
     F(i, L) {
       m = 0;
-      F(j, L + 1) C[g][i][j] = C[g][i][j] * .9997 + o[i] * o[j], m -= j - i ? C[g][i][j] * a[g][j] : 0;
-      a[g][i] = m / (C[g][i][i] + 100);
+      F(j, L + 1) C[g][i][j] = C[g][i][j] * LAM + o[i] * o[j], m -= j - i ? C[g][i][j] * a[g][j] : 0;
+      a[g][i] = m / (C[g][i][i] + NU);
     }
   }
   d ? fwrite(O, 1, 125000, stdout) : putchar((lo >> 24) + 1);

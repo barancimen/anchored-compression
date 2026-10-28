@@ -98,3 +98,8 @@ pay almost exactly that back: information moves between levels, it does not disa
 | same contexts on held-out h1 / h2 / h3 | -128 / -159 / -154 | transfers |
 | 004 = 002 + transposed + searched contexts | 39939 | scored S 42417 (best of family B) |
 | 003 = 001 with T=128 (16 anchors) | 39529 | scored S 41929 (new best) |
+| quadtree knobs (lab/qtsweep.sh): radius 6->7 / lr / counter limit / regulariser | within -13..+10 | noise |
+| RLS forgetting .9997 -> .9995 / .9993 / .9999 | -27 / -34 / +101 | .9995 |
+| forgetting .9995 + bucket scale 3->2 + variance rate 1/500 -> 1/300 | 39939 -> 39895 | keep (no code cost) |
+| same on held-out h1 / h2 / h3 / h4 | -44 / -43 / -31 / -30 | transfers |
+| 005 = 004 golfed + those constants: p.c 1846 -> 1737 chars, zip 1214 -> 1184 | 39895 | scored S 42313 (best of family B) |
