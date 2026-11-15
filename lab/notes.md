@@ -124,3 +124,26 @@ The model adapts fast (RLS memory ~3300 pixels, counters ~80 updates), so earlie
 only give it a warm start: at most ~90-120 bytes. The simulator (3 random fields by FFT,
 6 object kinds, percentile scaling) is 960 zipped bytes of extra program, counted twice.
 Scored as `006_simprior`: archive 39393 (-119), program 1987 zipped (+960), S 43425 (+1809).
+
+## 8. Headroom: ideal costs, where the bits go, oracle probes (2026-11-15)
+Tools: `lab/gauss_orders.py` (ideal cost of any coding order on the generator's Gaussian
+background), `lab/gen_labeled.py` (gen_image.py with a seed and per-pixel labels),
+`lab/costmap.c` (the reference model with a per-pixel cost dump and -D probes),
+`lab/where_bits.py`. Synthetic seeds 3 and 2 (scales 2.15 and 2.58). Write-up: `ideas.md`.
+
+| probe | result | verdict |
+|---|---|---|
+| ideal background cost, scale 2.5: raster r=2 / 3 / 7 / 15, Szego limit | 1.2279 / 1.2107 / 1.2035 / 1.2024 / 1.2021 bpp | radius 7 is at the limit |
+| quadtree from step 2 / 4 / 8, r=6; step 2 with r=3 / 2 | 1.2027 / 1.2029 / 1.2035; 1.2052 / 1.2104 | orders tie; hierarchy helps only with tiny stencils |
+| lattice 16 / 4 + raster look-ahead, r=7 | 1.2048 / 1.2027 | ties |
+| inside opaque shapes: own weights / background weights | 0.784 / 0.839 bpp | one shared predictor costs 0.055 bpp inside |
+| batch least squares on clean background (seed 3): in-sample / held-out vs theory | 1.127 / 1.158 vs 1.122 bpp | theory confirmed |
+| cost by label (mean of 2 images): excess over ideal, bytes | background 961, inside 257, outlines 731, lines 424, rings 210, stripes 400 | 2983 B = 7.9% headroom |
+| background excess by distance to objects | ~+0.05 bpp even 16+ px away; border 8 px +0.07..0.1 | spread out, not edge pollution |
+| Gaussian input alone vs mixed, clean background (seed 3) | 1.244 vs 1.170 bpp | counters + mixer repair the predictor |
+| RLS squared error on clean background vs theory: real image / background-only image | +12.6% / +4.6% (+3.4% late in the scan) | objects drag the shared weights |
+| -DVQ=.167 (variance minus rounding) | archive 36156 -> 36155 | Gaussian alone better, mixer already compensates |
+| -DGSN=4 (4 Gauss-Seidel sweeps per pixel) | 36156 -> 36140 | not the solver |
+| -DROB=4 / -DROB=1 (robust RLS updates) | 36156 -> 36184 / 36219 | reject |
+| -DTMPL oracle: additive objects known (seed 3 / 2) | -773 / -818 B | stripes -69%, rings -69%, lines -28%, outlines -23% of excess |
+| -DCLS oracle: one RLS weight set per true region (seed 3 / 2) | -319 / -229 B | perfect segmentation is worth ~0.7% |

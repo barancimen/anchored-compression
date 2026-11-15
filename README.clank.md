@@ -99,6 +99,15 @@ anchors, fills in the rest by drawing every bit from its own probabilities.
 keep the large-scale layout the anchors fix and redraw everything finer than 8 pixels; thin
 lines, rings and stripes mostly vanish. Details: `inpaint/README.md`.
 
+## Headroom and next ideas (`ideas.md`)
+A later analysis measured how far the reference coder is from the ideal on synthetic images
+whose objects are known. With ideal prediction, every coding order costs the same on the
+background to within 0.003 bpp, so no choice of anchor pixels can gain there. The coder is
+about 3 KB per image above the ideal: about 960 bytes in the background, where one shared
+predictor also has to learn the objects, and about 2 KB at outlines, lines, rings and striped
+discs. Knowing the additive objects exactly would save about 800 bytes. `ideas.md` ranks what
+could get these bits, starting with a predictor computed from the generator's known spectrum.
+
 ## What was tried (details and every number in `lab/notes.md`)
 - **Number of anchors:** lattice steps T = 1 (plain raster) to 256 for the quadtree, the
   row hierarchy and the look-ahead design; anchors verbatim ("stored in full") vs modelled
@@ -130,6 +139,9 @@ lines, rings and stripes mostly vanish. Details: `inpaint/README.md`.
 | `lab/notes.md` | all probes with numbers, including rejected ones |
 | `lab/eval_on.py`, `lab/generalization.tsv` | scoring on held-out images |
 | `inpaint/` | inpainting from the anchors with the quadtree model; `animation.gif` |
+| `ideas.md` | headroom analysis, literature and ranked next ideas |
+| `lab/gauss_orders.py` | ideal cost of any coding order on the generator's background |
+| `lab/gen_labeled.py`, `lab/costmap.c`, `lab/where_bits.py` | labelled synthetic images, per-pixel cost of the reference model with probes, cost by label |
 
 ## Reproduce
 
