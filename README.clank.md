@@ -4,8 +4,9 @@
 codes the rest of the image *given* those anchors beat a plain raster-scan coder on images
 from `gen_image.py`, measured by Hutter Prize rules?
 
-**Short answer: no, not on these images.** Every anchor design tried ties a raster coder at
-best in archive size, and the anchor machinery always adds program code, which counts twice.
+**Short answer: no, not on these images.** Every design that stores anchor pixels ties a raster
+coder at best in archive size, and the anchor machinery always adds program code, which counts
+twice.
 The best anchor compressor, `011_lattice_template` (S 41757), uses only 16 anchors and is 310
 bytes behind the raster coder with the same model, `007_template_ref` (S 41447). Before that
 model existed the gap was 313 bytes (S 41929 vs 41616). The best quadtree is 697 bytes behind
@@ -16,12 +17,14 @@ costs 3523 bytes of S. Training the model on images simulated inside the decompr
 
 ## Why
 1. **Coding order doesn't change the total information.** By the chain rule, coding anchors
-   first and the rest given them has the same ideal total as any other order; an order wins
-   only if its online model happens to learn better. Measured on the same pixels, the
+   first and the rest given them has the same ideal total as any other order; an order can win
+   only if its model happens to predict better in that order. Measured on the same pixels, the
    quadtree pays 2341 bytes more than raster for its anchors and coarse levels (they are
    predicted from far-away pixels) and saves 2081 bytes on its finest level (two-sided
    neighbours): net +260. Row-based refinement and anchors-plus-look-ahead land within ~1%
-   of raster too.
+   of raster too. Why the quadtree's model predicts worse was not isolated. Giving each of
+   its passes weights computed from the generator's spectrum, which need no learning, saved
+   only 15 bytes (`015_quadtree_kriging`).
 2. **Selected anchors can't pay for their positions.** Even when anchors are handed to the
    decoder for free, the rest of the image gets cheaper by little more than those pixels'
    own cost. Choosing them by edge strength (Sobel) or by coding cost helps the *other*
@@ -101,13 +104,14 @@ before decoding, so the model's learning is paid in CPU time instead of archive 
 `lab/sim.c` is a C port of `gen_image.py`: three random fields made by FFT, the light
 gradient, the six object kinds, percentile scaling, sensor noise. Its images look like the
 real ones and work as well as real ones for training.
-- **The ceiling is low.** Training on 1 to 8 *real* generator images (a perfect simulator)
-  saves at most ~90 bytes on `image.bin`. The model adapts within a few thousand pixels
+- **The ceiling is low.** In the lab probe, training on 1 to 8 *real* generator images (a
+  perfect simulator) saves about 90 bytes on `image.bin`, and the scored candidate saves 119.
+  The model adapts within a few thousand pixels
   (least-squares memory ~3300 pixels, counters ~80 updates), so earlier images only give it
   a warm start; settings that remember longer get worse, not better.
 - **The simulator is expensive.** It adds 960 zipped bytes of program, counted twice.
-- **Result:** archive 39393 (-119), S 43425 (+1809 vs the reference); held-out archives
-  -21 to -85.
+- **Result:** archive 39393 (-119), S 43425 (+1809 vs the reference). On the held-out images
+  the archive shrinks by only 21 to 85 bytes.
 
 ## Replaying the generator from its seed (`016_seed_replay`, not ranked)
 `gen_image.py` seeds numpy's random generator with 32 bytes from `os.urandom` and never stores
@@ -132,17 +136,20 @@ from known seeds (`lab/seed_check.py`, results in `lab/seed_replay.tsv`). The co
 is not run, and its archive is written down from the seed instead. The program is zipped,
 built and run in the usual sandbox, and it reproduced all six test images byte for byte.
 
-- The random numbers are numpy's, bit for bit, checked against numpy 2.2.6. The program contains the PCG64 generator, the
-  53-bit uniform, the ziggurat normal sampler and the bounded integer. The sampler's three
-  256-entry tables are rebuilt from two constants. They differ from numpy's stored tables in
-  the last digits, which changes a draw with probability about 1e-16.
+- The program contains the PCG64 generator, the 53-bit uniform, the ziggurat normal sampler
+  and the bounded integer, checked against numpy 2.2.6. The uniform and integer draws are
+  numpy's bit for bit. The sampler's three 256-entry tables are rebuilt from two constants and
+  differ from numpy's stored tables in the last digits. As a result 14% of the normal draws
+  differ from numpy's by up to 1e-14 of their value, measured on 2 million draws. A draw is
+  accepted or rejected differently from numpy with probability about 5e-16, or 3e-9 per
+  image. That did not happen in the 2 million draws or on the six test images.
 - No FFT is used. `np.fft.irfft2` is replaced by the direct sum over frequencies in two
   passes, which is two lines of C with complex numbers. A 500 x 500 image is small enough for
   that, and decoding takes 26 to 45 seconds. A recursive mixed-radix FFT (`lab/seed_fft`)
   decodes in 6 seconds but adds 152 zipped bytes, which is 304 bytes of S, and time is not
   scored.
-- Everything after the random numbers is floating point that only has to agree with numpy
-  before the final rounding to 16 levels. On two test images the values before rounding differ
+- The normal draws and everything computed from them only have to agree with numpy before the
+  final rounding to 16 levels. On two test images the values before rounding differ
   from numpy's by at most 1.2e-13 of a level, and no pixel is closer than 1.3e-6 to a rounding
   boundary.
 - The state in the archive is what numpy reports in `rng.bit_generator.state` right after
@@ -151,11 +158,13 @@ built and run in the usual sandbox, and it reproduced all six test images byte f
 
 ## Headroom and next ideas (`ideas.md`)
 A later analysis measured how far the reference coder is from the ideal on synthetic images
-whose objects are known. With ideal prediction, every coding order costs the same on the
-background to within 0.003 bpp, so no choice of anchor pixels can gain there. The coder is
-about 3 KB per image above the ideal: about 960 bytes in the background, where one shared
-predictor also has to learn the objects, and about 2 KB at outlines, lines, rings and striped
-discs. Knowing the additive objects exactly would save about 800 bytes. All six ideas in
+whose objects are known. With ideal prediction from stencils of radius 6 or more, every coding
+order costs the same on the background to within 0.003 bpp, so no choice of anchor pixels can
+gain there. The coder is about 3 KB per image above the ideal of a Gaussian model: about 960
+bytes in the background, 260 inside opaque shapes and 1.8 KB at outlines, lines, rings and
+striped discs. Real pixels do not quite reach that ideal. Even the best linear predictor fitted
+to an image's clean background costs about 0.02 bpp more, which is about 380 of the
+background's 960 bytes. Knowing the additive objects exactly would save about 800 bytes. All six ideas in
 `ideas.md` were then built and scored (its Results section). Only template matching paid:
 non-local means as a second Gaussian input (`007_template_ref`) saves 461 archive bytes and
 169 bytes of S. With that model in both, lattice anchors still trail raster by 310 bytes.

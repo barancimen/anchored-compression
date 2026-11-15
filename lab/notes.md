@@ -137,16 +137,18 @@ background), `lab/gen_labeled.py` (gen_image.py with a seed and per-pixel labels
 | quadtree from step 2 / 4 / 8, r=6; step 2 with r=3 / 2 | 1.2027 / 1.2029 / 1.2035; 1.2052 / 1.2104 | orders tie; hierarchy helps only with tiny stencils |
 | lattice 16 / 4 + raster look-ahead, r=7 | 1.2048 / 1.2027 | ties |
 | inside opaque shapes: own weights / background weights | 0.784 / 0.839 bpp | one shared predictor costs 0.055 bpp inside |
-| batch least squares on clean background (seed 3): in-sample / held-out vs theory | 1.127 / 1.158 vs 1.122 bpp | theory confirmed |
-| cost by label (mean of 2 images): excess over ideal, bytes | background 961, inside 257, outlines 731, lines 424, rings 210, stripes 400 | 2983 B = 7.9% headroom |
+| batch least squares, radius 7, clean background (seed 3), first run: 15000-pixel sample in-sample / other 15000 | 1.127 / 1.158 vs 1.122 bpp | the sample was lucky; next rows |
+| same fitted on all 95664 clean pixels / weights computed from the spectrum, no fitting | 1.141 / 1.139 vs 1.122 bpp | real pixels sit ~0.02 bpp above the Gaussian ideal |
+| seed 2, fitted on all clean pixels / background-only image (seed 3, scale 2.69), fitted / spectral weights / coder | 1.238 vs 1.221; 1.264 / 1.272 / 1.268 vs 1.247 bpp | the gap is ~380 B of background per image on both seeds; learning online costs ~0.005 bpp |
+| cost by label (mean of 2 images): excess over ideal, bytes | background 961, inside 257, outlines 731, lines 424, rings 210, stripes 400 | 2983 B = 7.9% over the Gaussian ideal; ~380 B of the background's share is out of reach of linear prediction |
 | background excess by distance to objects | ~+0.05 bpp even 16+ px away; border 8 px +0.07..0.1 | spread out, not edge pollution |
 | Gaussian input alone vs mixed, clean background (seed 3) | 1.244 vs 1.170 bpp | counters + mixer repair the predictor |
-| RLS squared error on clean background vs theory: real image / background-only image | +12.6% / +4.6% (+3.4% late in the scan) | objects drag the shared weights |
+| RLS squared error on clean background vs theory: real image / background-only image | +12.6% / +4.6% (+3.4% late in the scan); the best fitted predictor is itself +2.8% / +2.3% | objects drag the shared weights |
 | -DVQ=.167 (variance minus rounding) | archive 36156 -> 36155 | Gaussian alone better, mixer already compensates |
 | -DGSN=4 (4 Gauss-Seidel sweeps per pixel) | 36156 -> 36140 | not the solver |
 | -DROB=4 / -DROB=1 (robust RLS updates) | 36156 -> 36184 / 36219 | reject |
 | -DTMPL oracle: additive objects known (seed 3 / 2) | -773 / -818 B | stripes -69%, rings -69%, lines -28%, outlines -23% of excess |
-| -DCLS oracle: one RLS weight set per true region (seed 3 / 2) | -319 / -229 B | perfect segmentation is worth ~0.7% |
+| -DCLS oracle: one RLS weight set per true region (seed 3 / 2) | -319 / -229 B; background excess 961 -> 843 B | perfect segmentation is worth ~0.7% |
 
 ## 9. Ideas 1-6 of ideas.md (2026-11-15)
 Probe tool: `lab/model.c` (the reference model with -D knobs; without knobs it writes the
@@ -198,7 +200,8 @@ below), `fit.c` (greedy encoder-side fitter), `conv.py`. Archive bytes, 007 mode
 Candidate 014 (cut-down search so the plain-cc build finishes in about 11 min): image.bin
 38742 (-309 vs 007), seed 3 34948 (-543), held-out h1 38875 (-500), 40-50 objects found (16 of
 the 43 true objects on seed 3 matched in kind within 3 px; the rest are fragments that still
-help). Its p.c deflates to 3035 bytes against 1082 for 007: the decoder side alone (renderer,
+help). Its p.c deflates to 3035 bytes against 1082 for 007 with zlib at level 9 (2985 and 1069 with
+zopfli, as scored): the decoder side alone (renderer,
 object coding, layer in the model) is about 540 deflated bytes, i.e. about 1100 bytes of S,
 as much as a perfect fitter saves on average before the fitter's own code.
 
@@ -217,22 +220,28 @@ seeds are sha256("seed replay test n"), n = 1..6. S = 2 x zip + 32 + 50.
 | first plain port (numpy seed hashing, ziggurat, direct two-pass sum), 6 seeds identical | 1661 | 3404 | works at the first try |
 | same, shortened | 1472 | 3026 | |
 | archive = PCG64 state and increment after seeding, no seed hashing in the program | 1309 | 2700 | keep |
-| plain `double` and `for` in place of the D, F and N macros | 1295 | 2672 | keep: deflate codes the repeats as cheaply |
-| pass 1 sums straight into B / tail of the normal sampler uses two free globals / the three terrain fields are added inside g | -6 / -5 / -10 | | keep |
+| plain `double` in place of the D macro, and pass 1 summing straight into B | 1299 | 2680 | keep |
+| plain `for` and the number 250000 in place of the F and N macros | 1295 | 2672 | keep: deflate codes the repeats as cheaply |
+| tail of the normal sampler uses two free globals / the three terrain fields are added inside g | -5 / -10, each alone | | keep |
 | candidate 016: harness check on 6 seeds, all identical, decode 26-45 s | 1285 | 2652 | scored (status oracle) |
 | recursive mixed-radix FFT in place of the direct sum (`lab/seed_fft`), 2 seeds identical, decode 5-6 s | 1437 | 2956 | reject: +304 for time that is not scored |
 | archive = the raw os.urandom bytes, hashed as numpy's SeedSequence does (`lab/seed_urandom`), 2 seeds in the harness, 6 locally | 1455 | 2992 | variant: +340 |
 | the two percentiles stored in the archive (16 bytes) instead of sorting; size only, not built | 1216 | 2530 | not taken: the archive stays the state alone |
 | counter-context string, y fold by a conditional, weights in pass 2, hex multiplier | +1 .. +5 | | reject |
 
-Exactness. The random stream has to match numpy bit for bit; everything after it only has to
-agree before the final floor to 16 levels.
+Exactness. The uniform and integer draws and every accept decision of the normal sampler have
+to match numpy exactly. The normal values and everything after them only have to agree before
+the final floor to 16 levels.
 - Ziggurat tables rebuilt in the program by the usual recursion from R = 3.654152885361009 and
-  the strip area V. With V = 0.00492867323399 (the 12 digits usually quoted) the tables are off
-  by up to 3e-10 relative and a draw changes with probability 1e-12. With
-  V = 0.004928673233974652 (the value implied by numpy's own table) the acceptance thresholds
-  differ from numpy's by at most 18 in 2^52 and a draw changes with probability 8e-17, about
-  5e-10 per image of roughly 5 million normal draws.
+  the strip area V. With V = 0.00492867323399 (the 12 digits usually quoted) the fast-accept
+  thresholds are off by up to 6e5 in 2^52 and a decision changes with probability 1e-12 per
+  draw. With V = 0.004928673233974652 (the value implied by numpy's own table) they differ by
+  at most 18 in 2^52 (8e-17 per draw), and 37 of the 256 strip widths differ by up to 76 units
+  in the last place. So 14% of the normal draws differ from numpy's by up to 1e-14 of their
+  value, and the slow-path test against exp(-x^2/2) then flips with probability about 4e-16
+  per draw. In all that is about 5e-16 per draw, or 3e-9 per image of roughly 5 million normal
+  draws. Over 2 million draws compared with numpy, the uniforms were identical and no decision
+  changed.
 - Direct sum against np.fft.irfft2, seeds 1 and 5: the values before rounding differ from
   numpy's by at most 5.0e-14 and 1.2e-13 levels (the same at -O0 and -O2). The nearest pixel
   to a rounding boundary is 1.7e-6 and 1.3e-6 away, so the margin is 7 orders of magnitude and

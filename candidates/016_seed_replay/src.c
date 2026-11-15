@@ -6,13 +6,14 @@
 // never stored. The program is checked on images that the unchanged gen_image.py makes from
 // known seeds (lab/seed_check.py).
 //
-// The random stream is numpy's, bit for bit: the PCG64 generator, the 53-bit uniform, the
-// ziggurat normal and the bounded integer. The three ziggurat tables (256 entries each) are
-// rebuilt from R and V. They differ from numpy's stored tables in the last digits, which
-// changes a draw with probability about 1e-16.
-// Everything after the random stream is floating point that only has to agree with numpy
-// before the final rounding to 16 levels, so np.fft.irfft2 is replaced by the plain two-pass
-// sum over frequencies in g. No FFT is needed: 500 is small enough to sum directly.
+// The random stream is numpy's: the PCG64 generator, the 53-bit uniform, the ziggurat normal
+// and the bounded integer. Uniform and integer draws match numpy bit for bit. The three
+// ziggurat tables (256 entries each) are rebuilt from R and V and differ from numpy's stored
+// tables in the last digits, so 14% of the normal draws differ from numpy's by up to 1e-14 of
+// their value, and a draw is accepted or rejected differently with probability about 5e-16.
+// The normal draws and everything after them only have to agree with numpy before the final
+// rounding to 16 levels, so np.fft.irfft2 is replaced by the plain two-pass sum over
+// frequencies in g. No FFT is needed: 500 is small enough to sum directly.
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
