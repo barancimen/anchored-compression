@@ -1,0 +1,115 @@
+// 008: 007_template_ref plus a third Gaussian input from a predictor computed from the
+// generator's spectrum (readable source; p.c = this file minified by lab/minify2.py). Idea 1 of
+// ideas.md; no anchors. The background of gen_image.py is 2.5 x (1/f^3.4 + .3 x 1/f^2.2 +
+// .08 x 1/f field, each of unit variance) grey levels plus white noise (sd .28, and the
+// rounding's 1/12); its covariance for the lags of the 8x15 block is summed over the 500x500
+// frequency grid, and the simple-kriging weights for the 112 RLS neighbours are solved once
+// (Gaussian elimination) and scaled to sum to 1. The input's sd is fixed at .5 grey levels.
+// Same scan order as the reference: scan position (r, l) codes image pixel (row 499 - l,
+// column r). One program: stdin of exactly 125000 bytes = image -> compress to stdout;
+// otherwise the stdin is an archive -> decompress to stdout. Each 4-bit pixel is coded
+// MSB-first as 4 binary decisions. Each decision mixes (logistic mixer, one shared weight set):
+//   5 adaptive counters in hashed contexts (W,WW,NEE) (N,NE,NNE) (W,N,NW) (N,NE,NNE,W,N,NW)
+//   (WWW,NEEE,NE),
+//   a discretized-Gaussian input centred on an online least-squares (RLS, forgetting .9997)
+//   prediction from the 112 causal neighbours within radius 7 (one Gauss-Seidel sweep per
+//   pixel), with a variance learned per bucket of nearby prediction errors, and
+//   a second discretized-Gaussian input centred on a non-local means prediction: every
+//   position up to 4 scan rows back and 4 columns either side (causal ones only) is weighted
+//   by exp(-d / 2), d = the squared difference between its 12 nearest causal neighbours and
+//   ours; with its own error buckets, and
+//   a third discretized-Gaussian input centred on the kriging prediction (see above).
+#include <stdio.h>
+#include <math.h>
+#define F(i, n) for (i = 0; i < n; i++)
+#define S 528  // row stride of the padded image I: 8-pixel left margin, 20-pixel right margin
+#define L 112  // RLS inputs: causal neighbours within radius 7
+// offset of the i-th of the 12 nearest causal neighbours: 2 rows x 5 columns above, then W, WW
+#define T(i) (i < 10 ? (i / 5 - 2) * S + i % 5 - 2 : 9 - i)
+// signed frequency indices of grid point i of the 500x500 frequency grid
+#define KY(i) ((i / 500 + 250) % 500 - 250)
+#define KX(i) ((i % 500 + 250) % 500 - 250)
+typedef double D;
+unsigned char B[1 << 17], O[125000], I[S * S], N[1 << 22];
+unsigned x, z = -1, X, M;
+// h: contexts; H: counter slots (H[5..7] stay 0: dummy slots so one loop updates all)
+// n: candidate offset; q: error bucket of each Gaussian input
+int h[5], H[8], d, u, i, j, k, y, c, e, r, l, v, q[2], b, n;
+// P: counter probabilities (N = update counts, rate 1/(n+1.5), n <= 80); Y, R: mean and sd of
+// the Gaussian inputs (0: RLS, 1: non-local means, 2: kriging); E: |errors| of the first two; C: exponentially
+// weighted RLS sums, column L holds the right-hand side (o[L] = pixel and a[L] = -1 fold it
+// into the Gauss-Seidel sum); V: 2 x error variance per bucket (0..31 RLS, 32..63 non-local
+// means); Z, W: weight sum and weighted sum of the non-local means; Sp: unit spectrum, nz: its
+// normalisers, Rk: covariance per lag, A: kriging system, K: kriging weights
+D P[1 << 22], E[2][S * S], w[8], s[8], o[L + 1], a[L + 1], C[L][L + 1], V[64], Y[3], R[3] = {0, 0, .7071}, m, t, f, p, Z, W,
+    Sp[250000], nz[3], Rk[435], A[L][L + 1], K[L], be[3] = {3.4, 2.2, 1}, wt[3] = {1, .09, .0064};
+
+D st(D p) { return p = p * .9998 + .0001, log(p / (1 - p)); }
+// P(pixel < (v << e) - 16) under N(Y[j], R[j]^2 / 2); clipped tails folded into 0 and 15
+D G(int v, int j) { return v <<= e, v < 17 ? 0 : v > 31 ? 1 : erfc((Y[j] + 16.5 - v) / R[j]) / 2; }
+
+int main() {
+  d = fread(B, 1, 1 << 17, stdin) != 125000;
+  F(i, 1 << 22) P[i] = .5, I[i % (S * S)] = 8, V[i % 64] = 1, a[L] = -1;
+  // kriging weights: unit-variance spectra, covariance per lag (dy - 7, dx - 14), solve
+  F(i, 250000) if (i) F(j, 3) nz[j] += pow(hypot(KY(i), KX(i)) / 500, -be[j]);
+  F(i, 250000) if (i) F(j, 3) Sp[i] += wt[j] * pow(hypot(KY(i), KX(i)) / 500, -be[j]) / nz[j];
+  F(n, 435) F(i, 250000) Rk[n] += Sp[i] * cos(2 * M_PI * (KY(i) * (n / 29 - 7) + KX(i) * (n % 29 - 14)) / 500);
+  // white noise (.0784 + 1/12) / 2.5^2 on the diagonal; right-hand side: lag to the pixel
+  F(i, L) F(j, L + 1) A[i][j] = j < L ? Rk[(i / 15 - j / 15 + 7) * 29 + i % 15 - j % 15 + 14] + (i == j) * .02587 : Rk[i / 15 * 29 + i % 15 + 7];
+  F(i, L) for (j = i + 1; j < L; j++) for (f = A[j][i] / A[i][i], n = i; n <= L; n++) A[j][n] -= f * A[i][n];
+  for (i = L; i--; t += K[i] = f / A[i][i]) for (f = A[i][L], j = i + 1; j < L; j++) f -= A[i][j] * K[j];
+  F(i, L) K[i] /= t;
+  F(i, 4) X = X << 8 | B[u++];
+  F(r, 500) F(l, 500) {
+    k = (r + 8) * S + l + 8;
+    if (!l) F(j, 8) I[k - j - 1] = I[k - S];  // replicate the left edge
+    // the 112 causal neighbours = first 112 cells (row-major) of the 8x15 block ending at k
+    F(e, L) Y[0] += a[e] * (o[e] = I[k - 7 * S - 7 + e / 15 * S + e % 15]), Y[2] += K[e] * o[e];
+    // non-local means over the positions n = -4 rows .. this row, -4 .. +4 columns, before k
+    Z = W = 0;
+    for (n = -4 * S - 4; n < 0; n++)
+      if ((n + 2116) % S < 9) {  // 2116 = 4 * S + 4
+        t = 0;
+        F(i, 12) f = I[k + T(i)] - I[k + n + T(i)], t += f * f;
+        Z += t = exp(-t / 2), W += t * I[k + n];
+      }
+    Y[1] = W / (Z + 1e-99);
+    F(j, 2) q[j] = j * 32 + fmin((E[j][k - 1] + E[j][k - S] + E[j][k - S - 1] + E[j][k - S + 1]) * 3, 31), R[j] = sqrt(V[q[j]] * 2);
+    h[0] = I[k - 1] << 8 | I[k - 2] << 4 | I[k - S + 2];
+    h[1] = I[k - S] << 8 | I[k - S + 1] << 4 | I[k - 2 * S + 1];
+    h[2] = I[k - 1] << 8 | I[k - S] << 4 | I[k - S - 1];
+    h[3] = h[1] << 12 | h[2];
+    h[4] = I[k - 3] << 8 | I[k - S + 3] << 4 | I[k - S + 1];
+    b = (499 - l) * 500 + r;
+    v = B[b / 2] >> 4 - b % 2 * 4 & 15;
+    // c = 2 x (bits so far, with a leading 1); the remaining values are (c << e) - 16 ...
+    for (c = 1, e = 4; e--; c += y) {
+      c *= 2;
+      f = 0;
+      F(j, 3) t = G(c + 2, j), s[5 + j] = st((t - G(c + 1, j)) / (t - G(c, j) + 1e-30));
+      F(i, 5) s[i] = st(P[H[i] = (h[i] << 5 | c | i << 29) * 2654435761u >> 10]);
+      F(i, 8) f += w[i] * s[i];
+      p = 1 / (1 + exp(-f));
+      // binary arithmetic coder (carry-less, 32-bit range)
+      M = x + (z - x) * (p * .9999 + .00005);
+      y = d ? X <= M : v >> e & 1;
+      y ? z = M : (x = M + 1);
+      for (; (x ^ z) < 1 << 24; x <<= 8, z = z << 8 | 255) d ? X = X << 8 | B[u++] : putchar(z >> 24);
+      F(i, 8) w[i] += .001 * (y - p) * s[i], j = H[i], N[j] += N[j] < 80, P[j] += (y - P[j]) / (N[j] + .5);
+    }
+    I[k] = c -= 16;
+    O[b / 2] |= c << 4 - b % 2 * 4;
+    if (l > 498) F(j, 20) I[k + j] = c;  // replicate the right edge
+    F(j, 2) t = E[j][k] = fabs(c - Y[j]), V[q[j]] += (t * t - V[q[j]]) / 500;
+    Y[0] = Y[2] = 0;
+    // RLS sums with forgetting .9997 (regulariser 100), then one Gauss-Seidel sweep
+    o[L] = c;
+    F(i, L) {
+      m = 0;
+      F(j, L + 1) C[i][j] = C[i][j] * .9997 + o[i] * o[j], m -= j - i ? C[i][j] * a[j] : 0;
+      a[i] = m / (C[i][i] + 100);
+    }
+  }
+  d ? fwrite(O, 1, 125000, stdout) : putchar((x >> 24) + 1);
+}

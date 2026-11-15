@@ -6,11 +6,13 @@ from `gen_image.py`, measured by Hutter Prize rules?
 
 **Short answer: no, not on these images.** Every anchor design tried ties a raster coder at
 best in archive size, and the anchor machinery always adds program code, which counts twice.
-The best anchor compressor is 313 bytes behind the no-anchor reference (S 41929 vs 41616), and
-it gets there by using as few anchors as possible. The best *genuine* anchor algorithm, a
-lattice of anchors refined as a quadtree, is 697 bytes behind (S 42313). Both gaps hold on
-four held-out images. A second idea, training the model on images simulated from the same
-recipe inside the decompressor, saves 119 archive bytes but costs 1809 bytes of S.
+The best anchor compressor, `011_lattice_template` (S 41757), uses only 16 anchors and is 310
+bytes behind the raster coder with the same model, `007_template_ref` (S 41447). Before that
+model existed the gap was 313 bytes (S 41929 vs 41616). The best quadtree is 697 bytes behind
+the old reference (S 42313), and the stronger model does not close the gap. These gaps hold on
+four held-out images. Sending the objects' parameters as anchors saves 309 archive bytes but
+costs 3523 bytes of S. Training the model on images simulated inside the decompressor saves
+119 archive bytes but costs 1809 bytes of S.
 
 ## Why
 1. **Coding order doesn't change the total information.** By the chain rule, coding anchors
@@ -34,31 +36,42 @@ recipe inside the decompressor, saves 119 archive bytes but costs 1809 bytes of 
 
 S = 2 x zipped program + archive + charged command-line characters (34-58), C = D form.
 Every row is a verified round trip in this repo's harness (`results.tsv`).
-Kinds: **anchor** = this project's anchor candidates; **ref** = the earlier raster project's
-algorithms, copied here (`000` is its best, `r00` and `r03..r16` the rest); **sim** = source simulation.
+Kinds: **anchor** = this project's anchor candidates; **model** = this project's changes to the
+raster reference's model, without anchors (scored with `--ref`); **ref** = the earlier raster
+project's algorithms, copied here (`000` is its best, `r00` and `r03..r16` the rest); **sim** =
+source simulation.
 
 | S | candidate | kind | archive | zip | what it is |
 |---|---|---|---|---|---|
+| **41447** | `007_template_ref` | model | 39051 | 1173 | `000` + non-local means as a second Gaussian input (idea 4 of `ideas.md`) |
 | **41616** | `000_raster_ref` | ref | 39512 | 1027 | raster context mixing, 112-neighbour RLS (earlier project's v15) |
+| 41616 | `009_fastls_ref` | model | 39040 | 1263 | `007` + a small RLS that forgets fast (idea 2) |
 | 41638 | `r16_cm_v14` | ref | 39534 | 1027 | v14: context re-searched under the transposed scan |
 | 41652 | `r15_cm_v13` | ref | 39548 | 1027 | v13: transposed + mirrored scan |
+| 41703 | `010_selective_ref` | model | 39049 | 1302 | `009` + object pixels kept out of the slow RLS's training (idea 3) |
+| **41757** | `011_lattice_template` | anchor | 39065 | 1321 | best anchor compressor: `003` with `007`'s model |
 | 41821 | `r14_cm_v12` | ref | 39737 | 1017 | v12: micro-golf |
 | 41847 | `r13_cm_v11` | ref | 39737 | 1030 | v11: 5th counter context |
 | 41919 | `r12_cm_v10` | ref | 39835 | 1017 | v10: golf |
 | 41923 | `r11_cm_v9` | ref | 39819 | 1027 | v9: golf |
-| **41929** | `003_lattice_lookahead_t128` | anchor | 39529 | 1175 | best anchor compressor: 16 verbatim anchors + look-ahead |
+| 41929 | `003_lattice_lookahead_t128` | anchor | 39529 | 1175 | 16 verbatim anchors + look-ahead |
 | 41950 | `r10_cm_v8` | ref | 39810 | 1045 | v8: searched counter contexts |
 | 41968 | `001_lattice_lookahead` | anchor | 39566 | 1176 | 64 verbatim anchors + look-ahead |
+| 42044 | `008_kriging_ref` | model | 39026 | 1484 | `007` + a predictor computed from the generator's spectrum (idea 1) |
 | 42197 | `r09_cm_v7` | ref | 40031 | 1058 | v7: golf step (first scored here) |
 | 42250 | `r08_cm_v6` | ref | 40038 | 1081 | v6: RLS radius 6 (84 inputs) |
 | **42313** | `005_quadtree_golf` | anchor | 39895 | 1184 | best quadtree: anchor lattice + refinement |
 | 42417 | `004_quadtree_ctx` | anchor | 39939 | 1214 | quadtree, transposed, searched contexts |
+| 42460 | `012_quadtree_template` | anchor | 39634 | 1388 | `005` + non-local means |
 | 42512 | `r07_cm_v5` | ref | 40204 | 1125 | v5: golfed v4 |
 | 42644 | `002_quadtree` | anchor | 40200 | 1197 | first quadtree |
+| 42815 | `013_quadtree_edges` | anchor | 39819 | 1473 | `005` + edge-directed refinement (idea 6) |
 | 42854 | `r06_cm_v4` | ref | 40202 | 1297 | v4: RLS radius 4 (41 inputs) |
+| 43112 | `015_quadtree_kriging` | anchor | 39880 | 1591 | `005` + weights computed from the spectrum for each pass |
 | 43425 | `006_simprior` | sim | 39393 | 1987 | `000` trained on 3 simulated images before coding |
 | 43803 | `r05_cm_v3` | ref | 40451 | 1647 | v3: 4 contexts + Gaussian/OLS input |
 | 44334 | `r03_cm_v1` | ref | 42016 | 1130 | v1: 8 neighbour contexts, no linear predictor |
+| 44970 | `014_object_anchors` | anchor | 38742 | 3089 | `007` + object parameters as anchors (idea 5) |
 | 45786 | `r04_cm_ols` | ref | 41628 | 2050 | v2: v1 + OLS predictor (first scored here) |
 | 125336 | `r00_store` | ref | 125000 | 151 | stored verbatim |
 
@@ -97,8 +110,10 @@ whose objects are known. With ideal prediction, every coding order costs the sam
 background to within 0.003 bpp, so no choice of anchor pixels can gain there. The coder is
 about 3 KB per image above the ideal: about 960 bytes in the background, where one shared
 predictor also has to learn the objects, and about 2 KB at outlines, lines, rings and striped
-discs. Knowing the additive objects exactly would save about 800 bytes. `ideas.md` ranks what
-could get these bits, starting with a predictor computed from the generator's known spectrum.
+discs. Knowing the additive objects exactly would save about 800 bytes. All six ideas in
+`ideas.md` were then built and scored (its Results section). Only template matching paid:
+non-local means as a second Gaussian input (`007_template_ref`) saves 461 archive bytes and
+169 bytes of S. With that model in both, lattice anchors still trail raster by 310 bytes.
 
 ## What was tried (details and every number in `lab/notes.md`)
 - **Number of anchors:** lattice steps T = 1 (plain raster) to 256 for the quadtree, the
@@ -133,6 +148,8 @@ could get these bits, starting with a predictor computed from the generator's kn
 | `ideas.md` | headroom analysis, literature and ranked next ideas |
 | `lab/gauss_orders.py` | ideal cost of any coding order on the generator's background |
 | `lab/gen_labeled.py`, `lab/costmap.c`, `lab/where_bits.py` | labelled synthetic images, per-pixel cost of the reference model with probes, cost by label |
+| `lab/model.c` | the reference model with ideas 1-4 of `ideas.md` as `-D` knobs |
+| `lab/objects/` | object parameters as anchors: oracle, renderer, fitter |
 
 ## Reproduce
 
@@ -143,4 +160,5 @@ python3 harness/evaluate.py candidates/006_simprior --ref         # reference-ty
 python3 lab/eval_on.py heldout/h2/image.bin candidates/005_quadtree_golf
 cc -O2 -DT=4 -DRES=1 -DSHC=1 -DSHV=1 -o anchor lab/anchor.c -lm && ./anchor image.bin
 cc -O2 -o prime lab/prime.c -lm && ./prime image.bin lab/train/t01/image.bin   # priming
+cc -O2 -DTM=4 -DTMR=4 -DTMN=12 -DTMH=2 -o model lab/model.c -lm && ./model <image.bin | wc -c  # 007's model
 ```

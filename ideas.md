@@ -1,8 +1,30 @@
 # Headroom analysis and next ideas
 
-This note asks where an anchor compressor could still win on images from `gen_image.py`. It uses three kinds of evidence. A calculator gives the ideal cost of any coding order on the generator's background (`lab/gauss_orders.py`). The reference coder's cost per pixel was measured on synthetic images whose objects are known (`lab/gen_labeled.py`, `lab/costmap.c`, `lab/where_bits.py`). A literature search covered anchor selection, coding order and structural side information. The probes behind every measured number are listed in `lab/notes.md`, section 8. The ideas in the second half are untested, and their gains are estimates.
+This note asks where an anchor compressor could still win on images from `gen_image.py`. It uses three kinds of evidence. A calculator gives the ideal cost of any coding order on the generator's background (`lab/gauss_orders.py`). The reference coder's cost per pixel was measured on synthetic images whose objects are known (`lab/gen_labeled.py`, `lab/costmap.c`, `lab/where_bits.py`). A literature search covered anchor selection, coding order and structural side information. The probes behind every measured number are listed in `lab/notes.md`, section 8. The ideas in the second half were written before they were tried, and their gains are the estimates made then. All six were later built and scored, and the next section gives the results.
 
 In short, coding order is worth nothing on the background, even with finite stencils, so no choice of anchor pixels can help there. The reference coder is about 3 KB per image above the ideal. A third of that is in the background, where the shared predictor is pulled off course by the objects, and the rest sits at outlines, lines, rings and striped discs. Edge detection helps only if it is used to describe objects compactly or to adapt the model to local edges, and both routes have to pay for their code twice.
+
+## Results
+
+Every idea was built into a candidate and scored by `harness/evaluate.py` on `image.bin` with the same build line and charges as all earlier candidates. Ideas that change only the model were added to the raster reference and scored with `--ref`. Each one branches from the best candidate of its track, as `program.md` asks. The probes behind them are in `lab/notes.md`, sections 9 and 10.
+
+| candidate | idea | built on | archive | zip | S | against its base |
+|---|---|---|---|---|---|---|
+| `007_template_ref` | 4, non-local means as a second Gaussian input | 000 | 39,051 | 1,173 | 41,447 | −169 |
+| `008_kriging_ref` | 1, predictor computed from the spectrum | 007 | 39,026 | 1,484 | 42,044 | +597 |
+| `009_fastls_ref` | 2, small predictor that forgets fast | 007 | 39,040 | 1,263 | 41,616 | +169 |
+| `010_selective_ref` | 3, keep objects out of the slow predictor's training | 009 | 39,049 | 1,302 | 41,703 | +87 |
+| `011_lattice_template` | 003's 16 anchors with 007's model | 003 | 39,065 | 1,321 | 41,757 | −172 |
+| `012_quadtree_template` | non-local means in the quadtree | 005 | 39,634 | 1,388 | 42,460 | +147 |
+| `013_quadtree_edges` | 6, quadtree refined along edges | 005 | 39,819 | 1,473 | 42,815 | +502 |
+| `014_object_anchors` | 5, object parameters as anchors | 007 | 38,742 | 3,089 | 44,970 | +3,523 |
+| `015_quadtree_kriging` | 1 applied to the quadtree | 005 | 39,880 | 1,591 | 43,112 | +799 |
+
+Only template matching paid, and it did better than estimated. Averaging every position up to 4 rows back and 4 columns either side, weighted by how well its 12 nearest neighbours match the current pixel's, saved 461 archive bytes. On the synthetic images it helped outlines and rings most, which repeat nearby, and the striped discs least. The best single match saved 132 bytes and the mean of the 4 best saved 309.
+
+Ideas 1 to 3 gained far less than estimated, between 11 and 84 archive bytes. The counters and the mixer already recover most of what a better linear predictor offers. On clean background, a correctly calibrated spectral predictor alone would cost 1.144 bpp against the full coder's 1.168. Inside the coder, one global mixer weight has to serve background and edges at once, which leaves the input either too sharp at edges or too wide on background. Keeping objects out of the slow predictor's training made it worse.
+
+The anchor question gets the same answer with the stronger model. `011_lattice_template` is the new best anchor candidate and beats the old reference, but it is 310 bytes of S behind `007_template_ref` with the same model, as 003 was 313 behind 000. The quadtree loses 1,013 bytes to 007 even with non-local means, and neither edge-directed refinement nor computed weights per pass close the gap. Object parameters carry real information: the decoder can use them to save 309 archive bytes on `image.bin` and 500 on held-out h1. Finding, describing and drawing them takes 3,089 zipped bytes of program, so S is 3,523 bytes worse. The renderer and object coding alone cost about 1,100 bytes of S, about what a perfect fitter could save.
 
 ## The ideal cost of the background does not depend on the order
 

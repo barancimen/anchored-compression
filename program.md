@@ -37,7 +37,8 @@ to compare against and never becomes `best.json`. Its model and coder may be reu
 anchor candidates. `candidates/r00` and `r03..r16` are that project's other algorithms (store
 and every context-mixing version), copied and scored the same way. `006_simprior` (training
 the model on simulated images first) is not an anchor method either, so it is scored with
-`--ref` too.
+`--ref` too, as are `007` to `010`, which change only the model. `007_template_ref` adds
+non-local means to the reference and is the bar for anchor candidates that use its model.
 
 ## Design families
 - **A. Anchors as side information:** a lattice of anchors is stored first; the rest is

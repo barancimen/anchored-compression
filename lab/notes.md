@@ -147,3 +147,57 @@ background), `lab/gen_labeled.py` (gen_image.py with a seed and per-pixel labels
 | -DROB=4 / -DROB=1 (robust RLS updates) | 36156 -> 36184 / 36219 | reject |
 | -DTMPL oracle: additive objects known (seed 3 / 2) | -773 / -818 B | stripes -69%, rings -69%, lines -28%, outlines -23% of excess |
 | -DCLS oracle: one RLS weight set per true region (seed 3 / 2) | -319 / -229 B | perfect segmentation is worth ~0.7% |
+
+## 9. Ideas 1-6 of ideas.md (2026-11-15)
+Probe tool: `lab/model.c` (the reference model with -D knobs; without knobs it writes the
+reference's archive, 39512). Archive bytes of image.bin, local -O2 builds.
+
+| probe | archive | verdict |
+|---|---|---|
+| reference (lab/model.c, no knobs) | 39512 | same as 000 |
+| idea 1: kriging input (spectral weights, 112 neighbours, scale 2.5) | 39499 | -13 |
+| same with scale 2.2 / 2.8 | 39499 / 39499 | the scale hardly matters |
+| + mixer weight set chosen by the locally best Gaussian input (MIXC) | 39454 | |
+| + its sd fixed at .5 instead of buckets (KFIX) | 39428 | best idea-1 variant, -84 |
+| + its counter context (prediction, bucket) / variance minus rounding | 39458 / 39461 | no help |
+| RLS regularised towards the kriging weights, strength 3000 / 30000 / 300000 | 39554 / 39748 / 39906 | reject: adaptivity matters more |
+| mixer weight sets per bit position (with and without kriging) | 39565 .. 39570 | reject |
+| mixer learning rate .0005 / .002 (kriging + MIXC) | 39494 / 39454 | .001 stays |
+| diagnostic, seed 3, clean background: kriging Gaussian alone with ideal sd (offline) / in the coder as the only input / full mix | 1.144 / 1.197 / 1.168 bpp | one global mixer weight cannot calibrate it for both background and edges |
+| idea 2: one small RLS, 12 nearest @ .99 / 24 @ .998 / two predictors | 39495 / 39488 / 39523 | -24 at best |
+| idea 3: slow RLS learns with weight .3 / .1 where the small RLS did better | 39496 / 39518 | reject |
+| idea 4: template matching, best match of the 6 nearest within 6 columns, 6 rows | 39380 | -132 |
+| template of 10 / 12 nearest, 4x4 window | 39351 / 39351 | |
+| mean of the 2 / 4 / 8 best matches (12 nearest, 4x4) | 39262 / 39203 / 39327 | 4 best |
+| match on shape (mean removed) / counter context of the match | 39361 / 39349 | no help |
+| non-local means, weights exp(-d/h), 12 nearest, 4x4 window, h = 1.4 / 2 / 4 / 8 | 39099 / 39051 / 39078 / 39242 | h = 2: -461, kept as 007 |
+| non-local means, window 6x6 / 8x8 | 39046 / 39063 | 4x4 is enough |
+| on top of non-local means: kriging (KFIX) / + MIXC / small RLS / + selective training | 39025 / 39029 / 39040 / 39046 | -26 / -22 / -11 / -5 |
+| on top of non-local means: shared variance buckets / no RLS input | 39121 / 39308 | own buckets; the RLS still pays |
+| cost by label with the 007 model, seeds 3 and 2 | 35488 / 39162 (were 36156 / 39517) | excess per image: background 895 (961), inside 176 (257), outlines 564 (731), lines 349 (424), rings 103 (210), stripes 387 (400) |
+| quadtree 005 + non-local means over same-parity pixels within 4 / 8 | 39699 / 39634 (005: 39895) | candidate 012 uses 8 |
+| quadtree 005 + edge-directed interpolation (NEDI) input | 39819 | -76: candidate 013 |
+| quadtree 005 + kriging weights per pass | 39880 | -15: the T = 2 quadtree has no learning handicap to remove; candidate 015 |
+| lattice 003 + non-local means | 39065 (003: 39529) | candidate 011; 14 bytes behind 007 with the same model |
+
+## 10. Object parameters as anchors (idea 5; lab/objects/)
+Tools: `lab/objects/oracle.c` (007 with the true layer of lab/gen_layers.py given for free),
+`render.c` (object list to layer, gen_image.py's soft masks, opaque objects cover what is
+below), `fit.c` (greedy encoder-side fitter), `conv.py`. Archive bytes, 007 model.
+
+| probe | seed 2 | seed 3 | verdict |
+|---|---|---|---|
+| 007 model, no layer | 39163 | 35491 | |
+| true additive layer subtracted for the RLS / for non-local means / for both | 38531 / 38758 / 38434 | 34909 / 34736 / 34553 | both inputs should see it |
+| all true objects (opaque ones as additive with fitted amplitude), both inputs | 38099 | 33579 | -1064 / -1912 bound |
+| same without covering by opaque objects | +51 | +355 | keep covering |
+| parameters quantised to 1/8 px / 1/4 px | +60 / +135 | +135 / +350 | 1/8 px |
+| bound minus parameters (about 70 bits per object) | about -790 | about -1540 | |
+| full lab fitter (15.5 min at -O2) | | 34405 before parameters | 57% of the oracle, about -650 net |
+
+Candidate 014 (cut-down search so the plain-cc build finishes in about 11 min): image.bin
+38742 (-309 vs 007), seed 3 34948 (-543), held-out h1 38875 (-500), 40-50 objects found (16 of
+the 43 true objects on seed 3 matched in kind within 3 px; the rest are fragments that still
+help). Its p.c deflates to 3035 bytes against 1082 for 007: the decoder side alone (renderer,
+object coding, layer in the model) is about 540 deflated bytes, i.e. about 1100 bytes of S,
+as much as a perfect fitter saves on average before the fitter's own code.
