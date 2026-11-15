@@ -81,14 +81,16 @@ reads the original from an absolute path) is not an algorithm and was not copied
 
 ## Held-out images (`lab/generalization.tsv`; never used for tuning)
 
-| image | `000` reference | `003` best anchor | `005` best quadtree | `006` simulation |
-|---|---|---|---|---|
-| h1 | 41887 | 42200 (+313) | 42611 (+724) | 43748 (+1861) |
-| h2 | 41174 | 41494 (+320) | 41902 (+728) | 43017 (+1843) |
-| h3 | 41202 | 41515 (+313) | 41938 (+736) | 43109 (+1907) |
-| h4 | 40261 | 40573 (+312) | 40935 (+674) | 42113 (+1852) |
+| image | `000` reference | `003` best anchor | `005` best quadtree | `006` simulation | `007` non-local means | `011` anchors + `007`'s model |
+|---|---|---|---|---|---|---|
+| h1 | 41887 | 42200 (+313) | 42611 (+724) | 43748 (+1861) | 41771 (-116) | 42081 (+310) |
+| h2 | 41174 | 41494 (+320) | 41902 (+728) | 43017 (+1843) | 41032 (-142) | 41346 (+314) |
+| h3 | 41202 | 41515 (+313) | 41938 (+736) | 43109 (+1907) | 41010 (-192) | 41321 (+311) |
+| h4 | 40261 | 40573 (+312) | 40935 (+674) | 42113 (+1852) | 40070 (-191) | 40382 (+312) |
 
-The gaps on `image.bin` (+313, +697, +1809) hold on every held-out image.
+Differences are against `000`, except for `011`, which is compared with `007`, the raster coder
+with the same model. The gaps on `image.bin` (+313, +697, +1809, -169 and +310) hold on every
+held-out image.
 
 ## Simulating the source (`006_simprior`)
 Idea: let the decompressor generate images from the same recipe and train the model on them

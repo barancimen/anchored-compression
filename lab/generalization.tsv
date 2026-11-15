@@ -15,3 +15,11 @@ heldout/h1/image.bin	006_simprior	ok	43748	3974	39716	58	1.2709
 heldout/h2/image.bin	006_simprior	ok	43017	3974	38985	58	1.2475
 heldout/h3/image.bin	006_simprior	ok	43109	3974	39077	58	1.2505
 heldout/h4/image.bin	006_simprior	ok	42113	3974	38081	58	1.2186
+heldout/h1/image.bin	007_template_ref	ok	41771	2346	39375	50	1.2600
+heldout/h1/image.bin	011_lattice_template	ok	42081	2642	39389	50	1.2604
+heldout/h2/image.bin	007_template_ref	ok	41032	2346	38636	50	1.2364
+heldout/h2/image.bin	011_lattice_template	ok	41346	2642	38654	50	1.2369
+heldout/h3/image.bin	007_template_ref	ok	41010	2346	38614	50	1.2356
+heldout/h3/image.bin	011_lattice_template	ok	41321	2642	38629	50	1.2361
+heldout/h4/image.bin	007_template_ref	ok	40070	2346	37674	50	1.2056
+heldout/h4/image.bin	011_lattice_template	ok	40382	2642	37690	50	1.2061
