@@ -99,7 +99,7 @@ The oracles put the gain at about 1.1 KB per image with this model, perhaps 1.5 
 
 ### 6. A quadtree refined along edges
 
-This is the idea closest to the original anchor design. Code a coarse lattice, then refine it with interpolation weights estimated from the coarser level in a small window. Li and Orchard's edge-directed interpolation does this, using the coarse level's local covariance to pick the direction. Fine levels see an outline from both sides, and with small stencils hierarchies beat raster. Against it, coarse levels pay for every outline crossing at low resolution, and lines thinner than the lattice step vanish there, as the samples in `inpaint/` show. Combined with idea 1's computed weights for the background, this is the best chance for a true anchor coder to tie the reference. I expect it to stay a few hundred bytes behind.
+This is the idea closest to the original anchor design. Code a coarse lattice, then refine it with interpolation weights estimated from the coarser level in a small window. Li and Orchard's edge-directed interpolation does this, using the coarse level's local covariance to pick the direction. Fine levels see an outline from both sides, and with small stencils hierarchies beat raster. Against it, coarse levels pay for every outline crossing at low resolution, and lines thinner than the lattice step vanish there. Combined with idea 1's computed weights for the background, this is the best chance for a true anchor coder to tie the reference. I expect it to stay a few hundred bytes behind.
 
 ## Ideas dropped
 
