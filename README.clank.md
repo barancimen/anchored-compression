@@ -75,6 +75,9 @@ source simulation.
 | 45786 | `r04_cm_ols` | ref | 41628 | 2050 | v2: v1 + OLS predictor (first scored here) |
 | 125336 | `r00_store` | ref | 125000 | 151 | stored verbatim |
 
+`016_seed_replay` (S 2652) is not in this table because it cannot round-trip `image.bin`. It
+has its own section below.
+
 `r04_cm_ols` is copied unchanged except for one removed line that dumped a cost map to a
 scratch path (instrumentation). The earlier project's sandbox check (a "compressor" that
 reads the original from an absolute path) is not an algorithm and was not copied.
@@ -105,6 +108,46 @@ real ones and work as well as real ones for training.
 - **The simulator is expensive.** It adds 960 zipped bytes of program, counted twice.
 - **Result:** archive 39393 (-119), S 43425 (+1809 vs the reference); held-out archives
   -21 to -85.
+
+## Replaying the generator from its seed (`016_seed_replay`, not ranked)
+`gen_image.py` seeds numpy's random generator with 32 bytes from `os.urandom` and never stores
+them. If they were known, an image could be coded as 32 bytes plus a program that repeats the
+generator. `016_seed_replay` is that program. Its archive is the generator state that numpy
+derives from the seed, which holds the same information and spares the program numpy's seed
+hashing. With the raw seed bytes as the archive, S is 2992 (`lab/seed_urandom`). Neither is
+ranked, because the rules require a round trip and no compressor can find the seed from the
+image. `image.bin` itself cannot be coded this way at all.
+
+| part | bytes |
+|---|---|
+| archive, the generator's state after seeding | 32 |
+| program, zipped | 1285, counted twice |
+| charged command lines | 50 |
+| S | 2652 |
+
+That is about one sixteenth of the best real compressor (`007_template_ref`, S 41447).
+
+The measurement runs the unchanged harness on images that the unchanged `gen_image.py` makes
+from known seeds (`lab/seed_check.py`, results in `lab/seed_replay.tsv`). The compress command
+is not run, and its archive is written down from the seed instead. The program is zipped,
+built and run in the usual sandbox, and it reproduced all six test images byte for byte.
+
+- The random numbers are numpy's, bit for bit, checked against numpy 2.2.6. The program contains the PCG64 generator, the
+  53-bit uniform, the ziggurat normal sampler and the bounded integer. The sampler's three
+  256-entry tables are rebuilt from two constants. They differ from numpy's stored tables in
+  the last digits, which changes a draw with probability about 1e-16.
+- No FFT is used. `np.fft.irfft2` is replaced by the direct sum over frequencies in two
+  passes, which is two lines of C with complex numbers. A 500 x 500 image is small enough for
+  that, and decoding takes 26 to 45 seconds. A recursive mixed-radix FFT (`lab/seed_fft`)
+  decodes in 6 seconds but adds 152 zipped bytes, which is 304 bytes of S, and time is not
+  scored.
+- Everything after the random numbers is floating point that only has to agree with numpy
+  before the final rounding to 16 levels. On two test images the values before rounding differ
+  from numpy's by at most 1.2e-13 of a level, and no pixel is closer than 1.3e-6 to a rounding
+  boundary.
+- The state in the archive is what numpy reports in `rng.bit_generator.state` right after
+  seeding. Hashing the raw `os.urandom` bytes in the program, as numpy does, costs 170 more
+  zipped bytes.
 
 ## Headroom and next ideas (`ideas.md`)
 A later analysis measured how far the reference coder is from the ideal on synthetic images
@@ -152,6 +195,9 @@ non-local means as a second Gaussian input (`007_template_ref`) saves 461 archiv
 | `lab/gen_labeled.py`, `lab/costmap.c`, `lab/where_bits.py` | labelled synthetic images, per-pixel cost of the reference model with probes, cost by label |
 | `lab/model.c` | the reference model with ideas 1-4 of `ideas.md` as `-D` knobs |
 | `lab/objects/` | object parameters as anchors: oracle, renderer, fitter |
+| `candidates/016_seed_replay` | the generator replayed from its random state (not ranked) |
+| `lab/gen_seeded.py`, `lab/seed_check.py`, `lab/seed_replay.tsv` | images from known seeds, and the harness check of seed-replay programs on them |
+| `lab/seed_fft/`, `lab/seed_urandom/` | variants of `016`: a real FFT, and the raw seed bytes as the archive |
 
 ## Reproduce
 
@@ -163,4 +209,5 @@ python3 lab/eval_on.py heldout/h2/image.bin candidates/005_quadtree_golf
 cc -O2 -DT=4 -DRES=1 -DSHC=1 -DSHV=1 -o anchor lab/anchor.c -lm && ./anchor image.bin
 cc -O2 -o prime lab/prime.c -lm && ./prime image.bin lab/train/t01/image.bin   # priming
 cc -O2 -DTM=4 -DTMR=4 -DTMN=12 -DTMH=2 -o model lab/model.c -lm && ./model <image.bin | wc -c  # 007's model
+python3 lab/seed_check.py candidates/016_seed_replay 1 2 3         # 016 on images from known seeds
 ```

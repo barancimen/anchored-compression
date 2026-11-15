@@ -40,6 +40,11 @@ the model on simulated images first) is not an anchor method either, so it is sc
 `--ref` too, as are `007` to `010`, which change only the model. `007_template_ref` adds
 non-local means to the reference and is the bar for anchor candidates that use its model.
 
+`016_seed_replay` is outside the loop. It replays `gen_image.py` from the state of its random
+generator, which no compressor can recover from an image, so it cannot round-trip `image.bin`.
+`lab/seed_check.py` measures it on images made from known seeds. Its `results.tsv` row has the
+status `oracle`, and it is never ranked or compared with `best.json`.
+
 ## Design families
 - **A. Anchors as side information:** a lattice of anchors is stored first; the rest is
   coded in scan order by a model whose stencil also reads ahead into an interpolation of the

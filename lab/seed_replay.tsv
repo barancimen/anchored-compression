@@ -1,0 +1,11 @@
+seed	cand	status	S	code	L_A	charges	t_dec
+f75db2bdf67d89ac	016_seed_replay	ok	2652	2570	32	50	45.1
+8275261948517080	016_seed_replay	ok	2652	2570	32	50	38.3
+ebf80b6ad8a44124	016_seed_replay	ok	2652	2570	32	50	33.8
+cebb04521a97581b	016_seed_replay	ok	2652	2570	32	50	27.1
+2fcef7da70329368	016_seed_replay	ok	2652	2570	32	50	42.5
+3e87131eaf90b5a9	016_seed_replay	ok	2652	2570	32	50	25.9
+f75db2bdf67d89ac	seed_fft	ok	2956	2874	32	50	6.0
+2fcef7da70329368	seed_fft	ok	2956	2874	32	50	5.4
+f75db2bdf67d89ac	seed_urandom	ok	2992	2910	32	50	45.2
+2fcef7da70329368	seed_urandom	ok	2992	2910	32	50	43.3

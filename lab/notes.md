@@ -201,3 +201,43 @@ the 43 true objects on seed 3 matched in kind within 3 px; the rest are fragment
 help). Its p.c deflates to 3035 bytes against 1082 for 007: the decoder side alone (renderer,
 object coding, layer in the model) is about 540 deflated bytes, i.e. about 1100 bytes of S,
 as much as a perfect fitter saves on average before the fitter's own code.
+
+## 11. The generator replayed from its seed (016_seed_replay; not ranked) (2026-11-15)
+Question: what would S be if the 32 bytes that gen_image.py draws from os.urandom were known?
+The archive is then those bytes (or the generator state numpy derives from them) and the
+program is gen_image.py without numpy. No compressor can find the bytes, so this is not a
+candidate: image.bin cannot be coded, and the result is never ranked.
+Tools: `lab/gen_seeded.py` (the unchanged gen_image.py run with a known seed in place of
+os.urandom), `lab/seed_check.py` (the unchanged harness on such an image, with the compress
+command replaced by writing the archive from the seed; log in `lab/seed_replay.tsv`). Test
+seeds are sha256("seed replay test n"), n = 1..6. S = 2 x zip + 32 + 50.
+
+| probe | zip | S | verdict |
+|---|---|---|---|
+| first plain port (numpy seed hashing, ziggurat, direct two-pass sum), 6 seeds identical | 1661 | 3404 | works at the first try |
+| same, shortened | 1472 | 3026 | |
+| archive = PCG64 state and increment after seeding, no seed hashing in the program | 1309 | 2700 | keep |
+| plain `double` and `for` in place of the D, F and N macros | 1295 | 2672 | keep: deflate codes the repeats as cheaply |
+| pass 1 sums straight into B / tail of the normal sampler uses two free globals / the three terrain fields are added inside g | -6 / -5 / -10 | | keep |
+| candidate 016: harness check on 6 seeds, all identical, decode 26-45 s | 1285 | 2652 | scored (status oracle) |
+| recursive mixed-radix FFT in place of the direct sum (`lab/seed_fft`), 2 seeds identical, decode 5-6 s | 1437 | 2956 | reject: +304 for time that is not scored |
+| archive = the raw os.urandom bytes, hashed as numpy's SeedSequence does (`lab/seed_urandom`), 2 seeds in the harness, 6 locally | 1455 | 2992 | variant: +340 |
+| the two percentiles stored in the archive (16 bytes) instead of sorting; size only, not built | 1216 | 2530 | not taken: the archive stays the state alone |
+| counter-context string, y fold by a conditional, weights in pass 2, hex multiplier | +1 .. +5 | | reject |
+
+Exactness. The random stream has to match numpy bit for bit; everything after it only has to
+agree before the final floor to 16 levels.
+- Ziggurat tables rebuilt in the program by the usual recursion from R = 3.654152885361009 and
+  the strip area V. With V = 0.00492867323399 (the 12 digits usually quoted) the tables are off
+  by up to 3e-10 relative and a draw changes with probability 1e-12. With
+  V = 0.004928673233974652 (the value implied by numpy's own table) the acceptance thresholds
+  differ from numpy's by at most 18 in 2^52 and a draw changes with probability 8e-17, about
+  5e-10 per image of roughly 5 million normal draws.
+- Direct sum against np.fft.irfft2, seeds 1 and 5: the values before rounding differ from
+  numpy's by at most 5.0e-14 and 1.2e-13 levels (the same at -O0 and -O2). The nearest pixel
+  to a rounding boundary is 1.7e-6 and 1.3e-6 away, so the margin is 7 orders of magnitude and
+  the chance of one wrong pixel per image is about 1e-7.
+- One bug on the way: `W[i] = cos(t = ...) + 1i * sin(t)` read t before it was assigned
+  (unsequenced), which changed 41% of the pixels by one level.
+- Not handled, each with probability about 2^-32 per image: a second draw in numpy's bounded
+  integer (Lemire rejection), and in `lab/seed_urandom` a seed whose top 32 bits are zero.
