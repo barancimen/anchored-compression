@@ -81,7 +81,7 @@ reads the original from an absolute path) is not an algorithm and was not copied
 
 ## Held-out images (`lab/generalization.tsv`; never used for tuning)
 
-| image | `000` reference | `003` best anchor | `005` best quadtree | `006` simulation | `007` non-local means | `011` anchors + `007`'s model |
+| image | `000` reference | `003` 16 anchors | `005` best quadtree | `006` simulation | `007` non-local means | `011` anchors + `007`'s model |
 |---|---|---|---|---|---|---|
 | h1 | 41887 | 42200 (+313) | 42611 (+724) | 43748 (+1861) | 41771 (-116) | 42081 (+310) |
 | h2 | 41174 | 41494 (+320) | 41902 (+728) | 43017 (+1843) | 41032 (-142) | 41346 (+314) |
