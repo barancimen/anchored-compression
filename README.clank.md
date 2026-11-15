@@ -162,9 +162,10 @@ whose objects are known. With ideal prediction from stencils of radius 6 or more
 order costs the same on the background to within 0.003 bpp, so no choice of anchor pixels can
 gain there. The coder is about 3 KB per image above the ideal of a Gaussian model: about 960
 bytes in the background, 260 inside opaque shapes and 1.8 KB at outlines, lines, rings and
-striped discs. Real pixels do not quite reach that ideal. Even the best linear predictor fitted
-to an image's clean background costs about 0.02 bpp more, which is about 380 of the
-background's 960 bytes. Knowing the additive objects exactly would save about 800 bytes. All six ideas in
+striped discs. For a single image that ideal is only approximate. Over eight synthetic images a
+linear predictor with a fixed radius-7 stencil, fitted to each image's clean background, lands
+between 0.012 bpp below and 0.031 bpp above it. On the two images behind these figures it lands
+about 0.02 bpp above, which is about 380 of the background's 960 bytes. Knowing the additive objects exactly would save about 800 bytes. All six ideas in
 `ideas.md` were then built and scored (its Results section). Only template matching paid:
 non-local means as a second Gaussian input (`007_template_ref`) saves 461 archive bytes and
 169 bytes of S. With that model in both, lattice anchors still trail raster by 310 bytes.

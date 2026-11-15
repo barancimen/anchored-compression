@@ -138,9 +138,10 @@ background), `lab/gen_labeled.py` (gen_image.py with a seed and per-pixel labels
 | lattice 16 / 4 + raster look-ahead, r=7 | 1.2048 / 1.2027 | ties |
 | inside opaque shapes: own weights / background weights | 0.784 / 0.839 bpp | one shared predictor costs 0.055 bpp inside |
 | batch least squares, radius 7, clean background (seed 3), first run: 15000-pixel sample in-sample / other 15000 | 1.127 / 1.158 vs 1.122 bpp | the sample was lucky; next rows |
-| same fitted on all 95664 clean pixels / weights computed from the spectrum, no fitting | 1.141 / 1.139 vs 1.122 bpp | real pixels sit ~0.02 bpp above the Gaussian ideal |
-| seed 2, fitted on all clean pixels / background-only image (seed 3, scale 2.69), fitted / spectral weights / coder | 1.238 vs 1.221; 1.264 / 1.272 / 1.268 vs 1.247 bpp | the gap is ~380 B of background per image on both seeds; learning online costs ~0.005 bpp |
-| cost by label (mean of 2 images): excess over ideal, bytes | background 961, inside 257, outlines 731, lines 424, rings 210, stripes 400 | 2983 B = 7.9% over the Gaussian ideal; ~380 B of the background's share is out of reach of linear prediction |
+| same fitted on all 95664 clean pixels / weights computed from the spectrum, no fitting | 1.141 / 1.139 vs 1.122 bpp | the ideal is approximate for one image; see the 8-image row |
+| seed 2, fitted on all clean pixels / background-only image (seed 3, scale 2.69), fitted / spectral weights / coder | 1.238 vs 1.221; 1.264 / 1.272 / 1.268 vs 1.247 bpp | the gap is ~380 B of background on each of these two seeds; learning online costs ~0.005 bpp |
+| fitted radius-7 predictor minus theory, clean background, 8 synthetic images s1 / s2 / s3 / s4 / s5 / s6 / s7 / s8, and b3 (seed 3 without objects) | +0.002 / +0.016 / +0.020 / +0.019 / +0.031 / -0.012 / +0.022 / +0.020 / +0.017 bpp; spectral weights 0.0003 to 0.0016 worse | scatters by image, mean of s1-s8 +0.015: the ideal is good to about 0.03 bpp for one image; negative values rule out rounding alone |
+| cost by label (mean of 2 images): excess over ideal, bytes | background 961, inside 257, outlines 731, lines 424, rings 210, stripes 400 | 2983 B = 7.9% over the Gaussian ideal; on these two images ~380 B of the background's share is out of reach of a fixed linear predictor |
 | background excess by distance to objects | ~+0.05 bpp even 16+ px away; border 8 px +0.07..0.1 | spread out, not edge pollution |
 | Gaussian input alone vs mixed, clean background (seed 3) | 1.244 vs 1.170 bpp | counters + mixer repair the predictor |
 | RLS squared error on clean background vs theory: real image / background-only image | +12.6% / +4.6% (+3.4% late in the scan); the best fitted predictor is itself +2.8% / +2.3% | objects drag the shared weights |
